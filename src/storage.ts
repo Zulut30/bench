@@ -35,6 +35,12 @@ export function finalizeIntegrity(dir: string): void {
 export function loadRun(root: string, runId: string): SavedRun {
   if (!/^[a-z0-9][a-z0-9-]{0,150}$/.test(runId)) throw new Error('Неверный ID запуска');
   const dir = join(root, runId);
+  verifyIntegrity(dir, ['manifest.json', 'calls.jsonl', 'attempts.jsonl']);
+  const manifest = readJson(join(dir, 'manifest.json')) as SavedRun['manifest'];
+  if (![1, 2].includes(manifest.schemaVersion) || manifest.runId !== runId || !['mock', 'openrouter', 'codex-cli', 'claude-code', 'gemini-cli', 'manual'].includes(manifest.mode)) throw new Error('Неподдерживаемый manifest');
+  return { manifest, calls: readJsonl(join(dir, 'calls.jsonl')), attempts: readJsonl(join(dir, 'attempts.jsonl')) };
+}
+export function verifyIntegrity(dir: string, required: string[] = []): void {
   const checksums = readJson(join(dir, 'integrity.json')) as Record<string, string>;
   for (const [name, expected] of Object.entries(checksums)) {
     const target = resolve(dir, name);
@@ -42,12 +48,9 @@ export function loadRun(root: string, runId: string): SavedRun {
     if (pathFromRoot.startsWith('..') || isAbsolute(pathFromRoot)) throw new Error('Небезопасный путь артефакта');
     if (hash(readFileSync(target)) !== expected) throw new Error(`Артефакт изменён: ${name}`);
   }
-  for (const name of ['manifest.json', 'calls.jsonl', 'attempts.jsonl']) {
+  for (const name of required) {
     if (!checksums[name]) throw new Error(`Нет хеша обязательного артефакта: ${name}`);
   }
-  const manifest = readJson(join(dir, 'manifest.json')) as SavedRun['manifest'];
-  if (manifest.schemaVersion !== 1 || manifest.mode !== 'mock' || manifest.runId !== runId) throw new Error('Неподдерживаемый manifest');
-  return { manifest, calls: readJsonl(join(dir, 'calls.jsonl')), attempts: readJsonl(join(dir, 'attempts.jsonl')) };
 }
 
 export async function withProjectLock<T>(root: string, action: () => Promise<T>): Promise<T> {

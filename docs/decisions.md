@@ -59,3 +59,93 @@
 [Custom JavaScript provider](https://www.promptfoo.dev/docs/providers/custom-api/).
 Дополнительно использован Context7 `/promptfoo/promptfoo` и проверены типы
 локально установленного пакета; схема не выведена из устаревшего примера CLI.
+
+## Решения pilot и подключений
+
+Дата: 03.10.2026. Этап реализован поверх работающего mock; зависимости сохранены.
+Реальные модельные запросы и подписочные генерации при разработке не выполнялись.
+
+1. **Единый интерфейс, один движок.** ModelConnection диагностирует клиента,
+   выполняет один транспортный вызов и предоставляет тариф/верхнюю границу.
+   promptfoo по-прежнему выполняет задания и JavaScript assertions. Собственный
+   CallExecutor ведёт изоляцию, резерв, разрешённые технические повторы и артефакты.
+   HTTP 429 передаётся с metadata.rateLimitKind=quota: локальный исходник promptfoo
+   0.123.1 подтвердил, что без этого scheduler автоматически повторяет custom provider.
+   Регрессионный тест проверяет ровно один POST и остановку всех судей.
+2. **Строгий запуск.** Demo остаётся default. Для run обязателен явный provider,
+   для API — положительный --budget. Diagnose/dry-run не генерируют ответы.
+   Candidate и judge оплачиваются в разных запусках; evaluate имеет собственный
+   бюджет и включает только объективно допустимые пары сохранённых результатов.
+3. **OpenRouter.** Только публичный API, model ID + конкретный endpoint tag,
+   only/order, allow_fallbacks=false, require_parameters=true, max_price.
+   Endpoint metadata получается без ключа и сохраняет тариф/дату. Резерв по всему
+   опубликованному max_prompt/context + max output + request/image charges + retries;
+   неизвестные дополнительные платные параметры блокируют запуск. Поэтому резерв
+   может быть намного выше предполагаемой цены короткой задачи.
+   usage.cost — actual API, токенный расчёт — отдельная предварительная оценка.
+4. **Официальные CLI.** Args/stdin без shell, JSON/JSONL, свежая сессия и папка,
+   подписочный login управляется клиентом. Вход через API-key несовместим.
+   Не читаем OAuth и не имитируем веб-API. Codex --ephemeral/ignore-user-config/
+   ignore-rules/read-only; Claude safe-mode/restricted/empty tools/no MCP/hooks/
+   no session persistence; Gemini oauth-personal/overage never/maxSessionTurns.
+   Claude --bare не используется. --help подтверждает необходимые флаги перед запуском.
+5. **Граница подписки.** Claude может использовать Usage credits на сервере;
+   отключение команды credits в интерфейсе не отключает расход. До заявления
+   пользователя subscription.paidOverage=disabled клиент блокируется. Это заявление,
+   а не автоматическая проверка переключателя аккаунта. Для Codex вход принудительно
+   chatgpt; Gemini API-key env не передаётся и тип входа принудительно oauth-personal.
+   Квота прекращает весь этап без смены провайдера и платного fallback.
+6. **Изоляция и режим.** macOS sandbox-exec запрещает чтение/запись проекта/results;
+   Linux bwrap монтирует системные пути и нужные каталоги официального клиента,
+   закрывает protected paths. Работоспособность проверяется --version. Без изоляции
+   запрос не отправляется. Это ограничение рабочих файлов, не полная защита VM.
+   Codex/Gemini маркируются agent, Claude без tools и API — model-only.
+   Fake CLI на macOS подтвердил отсутствие доступа к fixtures/проверкам и ключам env.
+7. **Применённые параметры.** Requested config хранится отдельно от фактических
+   параметров. CLI temperature=null; Codex/Claude none→low; Gemini reasoning=null.
+   Claude max output — настройка клиента, Codex/Gemini output — наблюдаемый предел,
+   плюс обязательный timeout/шаги/размер потока. Жёсткий output cap без поддержки
+   клиента не заявляется. Actual model отсутствует у многих Codex exec JSONL:
+   поле null, автоматический regression signal запрещён.
+8. **Usage.** OpenRouter/Codex input и output уже содержат cache/reasoning. Claude
+   добавляет cache read/write к обычному input. Gemini prompt + tool-input и
+   candidates + thoughts; cached — подмножество prompt. Учитываем итоговые сводки,
+   не суммируем промежуточные assistant/modelUsage/roles. Hidden retries — null.
+   Claude total_cost_usd имеет смысл API-эквивалентной оценки подписочного вызова.
+   Доступные токены/ограничения/фиксированная месячная подписка задаются пользователем.
+9. **Бюджет и неизвестное.** Раздельные namespace api/synthetic; общий lock и журнал
+   для одного results-dir. Конверт включает retries до отправки, конкурентные calls
+   видят резерв. Неизвестная цена удерживает резерв; overcharge замораживает журнал.
+   Требуется сверка с биллингом; автоматического удаления/сброса неизвестных нет.
+10. **Честные проверки.** Maintenance regex обнаруживает явные противоречия,
+    но формат/факты и смысл разделены; неоднозначное pending. Pilot backend только
+    JSON-контракт. Рубрики текста/перевода/дизайна не заменены фиктивным судьёй.
+11. **A/B.** Случайный порядок, одинаковые источники/рубрика, JSON A/B/tie/
+    insufficient_data + причина, настоящие четыре PNG для vision. Оценки и ручные
+    проверки сохраняются отдельно от кандидатов. Swap-order показывает спор,
+    calibration — совпадение вердиктов/unknown. A/B остаётся относительным:
+    абсолютные категории в исходной истории не получают искусственный pass.
+12. **Сопоставимость.** Версии, tools, режим, config hash, окружение и actual route
+    определяют допустимость автоматического сигнала. Разные условия исключают
+    парное качество; цены остаются. Manual — заявленные условия, токены неизвестны,
+    автоматического регрессионного сигнала нет. Только suspected, без уверенного
+    рейтинга по пяти задачам и объяснений внутренних причин поведения модели.
+13. **Проверка текущего этапа.** Локальные HTTP/fake CLI, настоящий promptfoo,
+    JSON/PNG/HTML, бюджет и изоляция. Установленные Codex 0.147.0 / Claude 2.1.257
+    проверены только диагностически; Gemini отсутствует. Linux/native live генерации
+    ещё не подтверждены. Повторный npm audit: 10 high, те же транзитивные цепочки;
+    audit fix --force и неподтверждённые overrides не применялись.
+
+Документация и официальные источники:
+[OpenRouter endpoint metadata](https://openrouter.ai/docs/api/api-reference/endpoints/list-endpoints),
+[routing](https://openrouter.ai/docs/guides/routing/provider-selection),
+[usage](https://openrouter.ai/docs/guides/guides/usage-accounting),
+[Codex exec](https://developers.openai.com/codex/noninteractive),
+[config](https://developers.openai.com/codex/config-reference),
+[Claude CLI](https://code.claude.com/docs/en/cli-reference),
+[settings](https://code.claude.com/docs/en/settings),
+[costs](https://code.claude.com/docs/en/costs),
+[Gemini headless](https://geminicli.com/docs/cli/headless/),
+[configuration](https://geminicli.com/docs/reference/configuration/).
+Context7 использован для promptfoo, OpenRouter и Gemini; flags проверены локальным help,
+Gemini cumulative stats дополнительно сверены с официальным исходником uiTelemetry.

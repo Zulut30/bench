@@ -27,7 +27,7 @@ export function loadInputs(): { suite: Suite; config: DemoConfig } {
   return { suite: suiteSchema.parse(readJson(join(projectRoot, 'benchmarks/demo.json'))), config: configSchema.parse(readJson(join(projectRoot, 'configs/demo.json'))) };
 }
 
-function environment(): Manifest['environment'] {
+export function environment(): Manifest['environment'] {
   const packageJson = readJson(join(projectRoot, 'package.json')) as { dependencies: Record<string, string>; devDependencies: Record<string, string> };
   let commit: string | null = null;
   try { commit = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: projectRoot, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim(); } catch { /* Новый проект может быть без Git. */ }
@@ -37,7 +37,7 @@ function environment(): Manifest['environment'] {
       `fixtures:${hash(readFileSync(join(projectRoot, 'fixtures/mock-responses.json')))}`].join('\n')) };
 }
 
-function prepareOfflineRuntime(dir: string): void {
+export function prepareOfflineRuntime(dir: string): void {
   Object.assign(process.env, {
     PROMPTFOO_DISABLE_TELEMETRY: 'true', PROMPTFOO_DISABLE_UPDATE: 'true',
     PROMPTFOO_DISABLE_REMOTE_GENERATION: 'true', PROMPTFOO_DISABLE_REDTEAM_REMOTE_GENERATION: 'true',

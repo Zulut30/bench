@@ -1,9 +1,9 @@
 {
   "name": "practical-model-bench",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
-  "description": "Локальный практический бенчмарк моделей: этап 1, только mock",
+  "description": "Практический бенчмарк моделей: mock, OpenRouter, подписочные CLI и слепое A/B",
   "engines": { "node": ">=24.16.0 <25" },
   "scripts": {
     "typecheck": "tsc --noEmit",

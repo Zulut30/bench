@@ -1,5 +1,9 @@
 node_modules/
 results/
+results-*/
+configs/local-*.json
+manual-answers*.json
+reviews*.json
 .env
 .env.*
 !.env.example

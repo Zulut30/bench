@@ -6,6 +6,10 @@ import type { RunSummary } from './aggregate.js';
 import type { AttemptRecord, SavedRun } from './types.js';
 import { finalizeIntegrity, loadRun, writeJson } from './storage.js';
 import { renderComparison } from './report.js';
+import { loadEvaluation } from './judges.js';
+import { hash } from './storage.js';
+import { readFileSync } from 'node:fs';
+import type { JudgedPair } from './judges.js';
 
 function automaticRate(attempts: AttemptRecord[], threshold: number): number | null {
   const evaluated = attempts.filter((a) => a.checks.length > 0);
@@ -26,6 +30,21 @@ export function compareRuns(baseline: SavedRun, current: SavedRun) {
     && baseline.manifest.environment.arch === current.manifest.environment.arch
     && JSON.stringify(baseline.manifest.browser) === JSON.stringify(current.manifest.browser)
     && JSON.stringify(baseline.manifest.generation) === JSON.stringify(current.manifest.generation);
+  const conditions = (run: SavedRun) => run.manifest.conditions ? {
+    provider: run.manifest.conditions.provider, executionMode: run.manifest.conditions.executionMode,
+    clientVersion: run.manifest.conditions.clientVersion, authMethod: run.manifest.conditions.authMethod,
+    tools: run.manifest.conditions.tools, configHash: run.manifest.conditions.configHash, isolation: run.manifest.conditions.isolation,
+  } : { provider: 'mock' };
+  const route = (run: SavedRun) => [...new Set(run.calls.filter((c) => c.role === 'candidate' && c.status === 'ok')
+    .map((c) => `${c.returnedProvider ?? c.provider}/${c.returnedModel ?? c.requestedModel}; endpoint=${'candidate' in run.manifest.config ? run.manifest.config.candidate.providerEndpoint ?? 'client' : 'mock'}`))].sort();
+  const routeChanged = JSON.stringify(route(baseline)) !== JSON.stringify(route(current));
+  const routeVerified = (run: SavedRun) => run.manifest.mode === 'mock' || run.manifest.mode !== 'manual'
+    && run.calls.some((c) => c.role === 'candidate' && c.status === 'ok')
+    && run.calls.filter((c) => c.role === 'candidate' && c.status === 'ok')
+      .every((c) => c.returnedModel !== null && (run.manifest.mode !== 'openrouter' || c.returnedProvider != null));
+  const routesVerified = routeVerified(baseline) && routeVerified(current);
+  const conditionsCompatible = JSON.stringify(conditions(baseline)) === JSON.stringify(conditions(current));
+  const regressionEligible = shellCompatible && conditionsCompatible && routesVerified && !routeChanged && baseline.manifest.mode !== 'manual';
   const matches = baseline.manifest.suite.tasks.filter((task) => task.readiness === 'enabled' && evaluationCompatible
     && baseline.manifest.taskHashes[task.id] === current.manifest.taskHashes[task.id]
     && baseline.manifest.promptHashes[task.id] === current.manifest.promptHashes[task.id]
@@ -42,7 +61,8 @@ export function compareRuns(baseline: SavedRun, current: SavedRun) {
       const other = after.find((b) => b.index === a.index);
       return other ? [{ before: a, after: other }] : [];
     });
-    const usable = pairs.filter((p) => p.before.checks.length > 0 && p.after.checks.length > 0);
+    const usable = pairs.filter((p) => p.before.checks.length > 0 && p.after.checks.length > 0
+      && (baseline.manifest.schemaVersion === 1 && current.manifest.schemaVersion === 1 || shellCompatible && conditionsCompatible));
     allPairedBaseline.push(...pairs.map((p) => p.before));
     allPairedCurrent.push(...pairs.map((p) => p.after));
     pairedBaseline.push(...usable.map((p) => p.before));
@@ -54,7 +74,7 @@ export function compareRuns(baseline: SavedRun, current: SavedRun) {
       pairedAttempts: usable.length, skippedPairs: pairs.length - usable.length,
       baselineAutomatedPassRate: baselineRate, currentAutomatedPassRate: currentRate,
       deltaPercentagePoints: delta === null ? null : delta * 100,
-      status: delta === null ? 'not_evaluated' : delta < 0 ? 'suspected' : delta > 0 ? 'improved' : 'stable' };
+      status: delta === null ? 'not_evaluated' : !regressionEligible ? 'not_comparable' : delta < 0 ? 'suspected' : delta > 0 ? 'improved' : 'stable' };
   });
   const comparableSuite = { ...baseline.manifest.suite, tasks: matches };
   const matchingCalls = (run: SavedRun, attempts: AttemptRecord[]) => run.calls.filter((c) => attempts.some((a) => a.attemptId === c.attemptId));
@@ -65,10 +85,11 @@ export function compareRuns(baseline: SavedRun, current: SavedRun) {
   const afterQuality = aggregate([], pairedCurrent, comparableSuite, current.manifest.timezone);
   const excludedTaskIds = [...new Set([...baseline.manifest.suite.tasks, ...current.manifest.suite.tasks].map((t) => t.id))].filter((id) => !matches.some((t) => t.id === id));
   return {
-    schemaVersion: 1, mode: 'mock', baselineRunId: baseline.manifest.runId, currentRunId: current.manifest.runId,
-    comparisonKind: !evaluationCompatible || !matches.length ? 'not_comparable' : shellCompatible ? 'models' : 'systems',
+    schemaVersion: 1, mode: baseline.manifest.mode === 'mock' && current.manifest.mode === 'mock' ? 'mock' : 'measurement', baselineRunId: baseline.manifest.runId, currentRunId: current.manifest.runId,
+    comparisonKind: !evaluationCompatible || !matches.length ? 'not_comparable' : shellCompatible && conditionsCompatible ? 'models' : 'systems',
     suiteChanged: baseline.manifest.suiteHash !== current.manifest.suiteHash,
-    evaluationCompatible, shellCompatible, excludedTaskIds,
+    evaluationCompatible, shellCompatible, conditionsCompatible, regressionEligible, routeChanged, routesVerified,
+    routes: { baseline: route(baseline), current: route(current) }, excludedTaskIds,
     matchingTaskCount: matches.length, observedTaskCount: tasks.filter((t) => t.pairedAttempts > 0).length,
     pairedAttemptCount: pairedBaseline.length, tasks, baseline: before, current: after,
     categories: beforeQuality.categories.map((c) => {
@@ -80,14 +101,22 @@ export function compareRuns(baseline: SavedRun, current: SavedRun) {
         baselineScore: c.meanScore, currentScore: other.meanScore };
     }),
     costDeltaUsd: diff(before.totals.costs.total.value, after.totals.costs.total.value),
-    uncertainty: 'Синтетическое демо. Две попытки одной задачи зависимы; независимые единицы — задачи. Статистическая уверенность и причина изменения не оцениваются. Отрицательное изменение — только suspected, требуется свежий повтор.',
+    incurredCostDeltaUsd: diff(before.totals.incurredCostUsd, after.totals.incurredCostUsd),
+    uncertainty: `${baseline.manifest.synthetic && current.manifest.synthetic ? 'Синтетическое демо.' : 'Малый диагностический набор.'} Повторы одной задачи зависимы; независимые единицы — задачи. Статистическая уверенность и причина изменения не оцениваются. Отрицательное изменение при совместимых условиях — только suspected; требуется свежий повтор. Несовместимые условия/маршрут исключены из автоматического сигнала.`,
     includesJudgeCosts: true,
+    judging: null as { id: string; version: string; pairs: JudgedPair[]; orderDisputes: string[] } | null,
   };
 }
 export type Comparison = ReturnType<typeof compareRuns>;
 
-export function saveComparison(root: string, baselineId: string, currentId: string): { dir: string; comparison: Comparison } {
-  const comparison = compareRuns(loadRun(root, baselineId), loadRun(root, currentId));
+export function saveComparison(root: string, baselineId: string, currentId: string, evaluationId?: string): { dir: string; comparison: Comparison } {
+  const baseline = loadRun(root, baselineId), current = loadRun(root, currentId);
+  const evaluation = evaluationId ? loadEvaluation(root, evaluationId) : null;
+  if (evaluation && (evaluation.artifact.baselineRunId !== baselineId || evaluation.artifact.currentRunId !== currentId
+    || evaluation.artifact.baselineIntegrityHash !== hash(readFileSync(join(root, baselineId, 'integrity.json')))
+    || evaluation.artifact.currentIntegrityHash !== hash(readFileSync(join(root, currentId, 'integrity.json'))))) throw new Error('Оценка относится к другой паре или изменённым запускам');
+  const comparison = compareRuns(baseline, evaluation ? { ...current, calls: [...current.calls, ...evaluation.calls] } : current);
+  if (evaluation) comparison.judging = { id: evaluation.artifact.evaluationId, version: evaluation.artifact.judgeVersion, pairs: evaluation.artifact.pairs, orderDisputes: evaluation.artifact.orderDisputes };
   const parent = join(root, 'comparisons');
   mkdirSync(parent, { recursive: true });
   const dir = join(parent, `compare-${randomUUID()}`);

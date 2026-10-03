@@ -27,8 +27,8 @@ export function uniqueCalls(calls: CallRecord[]): CallRecord[] {
   return [...map.values()];
 }
 
-export function costBreakdown(calls: CallRecord[]) {
-  const cost = (selected: CallRecord[]) => sumKnown(selected.map((c) => c.modeledCostUsd));
+export function costBreakdown(calls: CallRecord[], actual = false) {
+  const cost = (selected: CallRecord[]) => sumKnown(selected.map((c) => actual ? c.incurredCostUsd : c.modeledCostUsd));
   return {
     candidateInitial: cost(calls.filter((c) => c.role === 'candidate' && c.retryIndex === 0)),
     judgeInitial: cost(calls.filter((c) => c.role === 'judge' && c.retryIndex === 0)),
@@ -57,11 +57,16 @@ export function summarizeCalls(input: CallRecord[], attempts: AttemptRecord[]) {
       total: sumKnown(calls.map((c) => c.usage.total)), reasoning: sumKnown(calls.map((c) => c.usage.reasoning)),
       cacheRead: sumKnown(calls.map((c) => c.usage.cacheRead)), cacheWrite: sumKnown(calls.map((c) => c.usage.cacheWrite)),
     },
-    costs, incurredCostUsd: roundUsd(calls.reduce((sum, c) => sum + c.incurredCostUsd, 0)),
+    costs, actualCosts: costBreakdown(calls, true), incurredCostUsd: sumKnown(calls.map((c) => c.incurredCostUsd)).value,
+    incurredCost: sumKnown(calls.map((c) => c.incurredCostUsd)),
+    subscriptionRuns: calls.filter((c) => c.subscriptionRun).length,
+    agentSteps: sumKnown(calls.map((c) => c.agentSteps ?? null)),
+    accountingIncompleteCalls: calls.filter((c) => c.accountingIncomplete).length,
     callElapsedMs: calls.reduce((sum, c) => sum + c.elapsedMs, 0),
     successfulAttempts,
     costPerSuccessUsd: successfulAttempts === 0 || costs.total.value === null ? null : roundUsd(costs.total.value / successfulAttempts),
     judgeIncludedInCostPerSuccess: true,
+    incurredCostPerSuccessUsd: !successfulAttempts || calls.some((c) => c.incurredCostUsd === null) ? null : roundUsd(calls.reduce((s, c) => s + c.incurredCostUsd!, 0) / successfulAttempts),
   };
 }
 export type CallSummary = ReturnType<typeof summarizeCalls>;
@@ -70,7 +75,7 @@ export interface CategorySummary {
   evaluatedAttempts: number; passed: number; failed: number; pending: number; skipped: number;
   subjectivePending: number; passRate: number | null; automatedPassRate: number | null; meanScore: number | null;
   coverage: 'uncovered' | 'not_evaluated' | 'partial' | 'pending' | 'evaluated';
-  primaryCostUsd: Sum;
+  primaryCostUsd: Sum; primaryIncurredCostUsd: Sum;
 }
 
 export function summarizeCategories(suite: Suite, calls: CallRecord[], attempts: AttemptRecord[]): CategorySummary[] {
@@ -95,6 +100,7 @@ export function summarizeCategories(suite: Suite, calls: CallRecord[], attempts:
       meanScore: scores.length ? scores.reduce((s, v) => s + v, 0) / scores.length : null,
       coverage: !tasks.length ? 'uncovered' : !executedTaskCount ? 'not_evaluated' : skipped ? 'partial' : pending ? 'pending' : 'evaluated',
       primaryCostUsd: sumKnown(uniqueCalls(calls).filter((c) => c.primaryCategory === id).map((c) => c.modeledCostUsd)),
+      primaryIncurredCostUsd: sumKnown(uniqueCalls(calls).filter((c) => c.primaryCategory === id).map((c) => c.incurredCostUsd)),
     };
   });
 }
@@ -106,7 +112,7 @@ function grouped(calls: CallRecord[], attempts: AttemptRecord[], callKey: (c: Ca
 
 export function aggregate(callsInput: CallRecord[], attempts: AttemptRecord[], suite: Suite, timezone: string) {
   const calls = uniqueCalls(callsInput);
-  const modelFor = (c: CallRecord) => attempts.find((a) => a.attemptId === c.attemptId && a.runId === c.runId)?.model ?? c.requestedModel;
+  const modelFor = (c: CallRecord) => attempts.find((a) => a.attemptId === c.attemptId && (a.runId === c.runId || a.runId === c.sourceRunId))?.model ?? c.requestedModel;
   const totals = summarizeCalls(calls, attempts);
   const categories = summarizeCategories(suite, calls, attempts);
   const enabled = suite.tasks.filter((t) => t.readiness === 'enabled');
@@ -114,13 +120,15 @@ export function aggregate(callsInput: CallRecord[], attempts: AttemptRecord[], s
     totals, categories,
     taskCount: enabled.length, plannedAttempts: enabled.reduce((s, t) => s + t.limits.attempts, 0),
     executedTaskCount: new Set(attempts.filter((a) => a.callIds.length).map((a) => a.taskId)).size,
-    statuses: Object.fromEntries(['passed', 'failed', 'pending', 'not_evaluated', 'budget_exhausted', 'technical_error', 'limit_exceeded'].map((status) => [status, attempts.filter((a) => a.status === status).length])),
-    byAttempt: grouped(calls, attempts, (c) => `${c.runId}/${c.attemptId}`, (a) => `${a.runId}/${a.attemptId}`),
+    statuses: Object.fromEntries([...new Set(['passed', 'failed', 'pending', 'not_evaluated', 'budget_exhausted', 'technical_error', 'limit_exceeded', ...attempts.map((a) => a.status)])].map((status) => [status, attempts.filter((a) => a.status === status).length])),
+    byBillingMode: Object.fromEntries([...new Set(calls.map((c) => c.billingMode ?? 'mock'))].map((mode) => [mode,
+      summarizeCalls(calls.filter((c) => (c.billingMode ?? 'mock') === mode), attempts.filter((a) => calls.some((c) => c.attemptId === a.attemptId && (c.sourceRunId ?? c.runId) === a.runId && (c.billingMode ?? 'mock') === mode)))])),
+    byAttempt: grouped(calls, attempts, (c) => `${c.sourceRunId ?? c.runId}/${c.attemptId}`, (a) => `${a.runId}/${a.attemptId}`),
     byTask: grouped(calls, attempts, (c) => c.taskId, (a) => a.taskId),
     byPrimaryCategory: grouped(calls, attempts, (c) => c.primaryCategory, (a) => a.primaryCategory),
     byModel: grouped(calls, attempts, modelFor, (a) => a.model),
     byMonth: Object.fromEntries([...new Set(calls.map((c) => monthKey(new Date(c.startedAt), timezone)))].sort().map((month) => [month,
-      summarizeCalls(calls.filter((c) => monthKey(new Date(c.startedAt), timezone) === month), attempts.filter((a) => calls.some((c) => c.attemptId === a.attemptId && monthKey(new Date(c.startedAt), timezone) === month)))])),
+      summarizeCalls(calls.filter((c) => monthKey(new Date(c.startedAt), timezone) === month), attempts.filter((a) => calls.some((c) => c.attemptId === a.attemptId && (c.sourceRunId ?? c.runId) === a.runId && monthKey(new Date(c.startedAt), timezone) === month)))])),
     uncoveredCategories: categories.filter((c) => c.coverage === 'uncovered').map((c) => c.id),
   };
 }

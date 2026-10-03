@@ -42,7 +42,7 @@ export const taskSchema = z.strictObject({
     maxRetries: z.number().int().min(0).max(2),
     maxSteps: z.number().int().positive(),
     attempts: z.number().int().positive().max(10),
-    maxJudgeCalls: z.literal(0),
+    maxJudgeCalls: z.number().int().min(0).max(4),
   }),
   reference: z.string().nullable(),
   readiness: z.enum(['draft', 'validated', 'enabled']),
@@ -93,4 +93,7 @@ export const configSchema = z.strictObject({
   }),
 });
 export type DemoConfig = z.infer<typeof configSchema>;
-export type Tariff = DemoConfig['tariff'];
+export interface Tariff {
+  id: string; version: string; asOf: string; currency: 'USD'; synthetic: boolean;
+  inputPerMillion: number; cacheReadPerMillion: number; cacheWritePerMillion: number; outputPerMillion: number;
+}

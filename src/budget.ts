@@ -10,9 +10,10 @@ const reservationSchema = z.strictObject({
   reconciliationRequired: z.boolean(), finished: z.boolean(),
 });
 export const budgetStateSchema = z.strictObject({
-  schemaVersion: z.literal(1), namespace: z.literal('synthetic'), timezone: z.string(),
+  schemaVersion: z.literal(1), namespace: z.enum(['synthetic', 'api']), timezone: z.string(),
   runs: z.record(z.string(), accountSchema), tasks: z.record(z.string(), accountSchema),
   months: z.record(z.string(), accountSchema), reservations: z.record(z.string(), reservationSchema),
+  frozenReason: z.string().optional(),
 });
 export type BudgetState = z.infer<typeof budgetStateSchema>;
 export type BudgetLimits = DemoConfig['syntheticBudget'];
@@ -38,16 +39,19 @@ export class BudgetLedger {
     readonly timezone: string,
     initial?: BudgetState,
     private readonly persist?: (state: BudgetState) => void,
+    namespace: BudgetState['namespace'] = 'synthetic',
   ) {
     Object.values(limits).forEach((v) => toMicro(v, 'down'));
     monthKey(new Date(), timezone);
     this.state = initial ? budgetStateSchema.parse(initial) : {
-      schemaVersion: 1, namespace: 'synthetic', timezone, runs: {}, tasks: {}, months: {}, reservations: {},
+      schemaVersion: 1, namespace, timezone, runs: {}, tasks: {}, months: {}, reservations: {},
     };
     if (this.state.timezone !== timezone) throw new Error('Таймзона журнала отличается; используйте отдельный results-dir');
+    if (this.state.namespace !== namespace) throw new Error('Нельзя смешивать API и синтетический журнал');
   }
 
   reserve(runId: string, taskId: string, upper: { perCallUsd: number; attemptUsd: number } | null, now: Date): BudgetDecision {
+    if (this.state.frozenReason) return { allowed: false, reason: `Журнал заблокирован до сверки: ${this.state.frozenReason}` };
     if (upper === null) return { allowed: false, reason: 'Неизвестен тариф или верхняя граница стоимости' };
     const request = toMicro(upper.perCallUsd, 'up');
     const next = toMicro(upper.attemptUsd, 'up');
@@ -113,6 +117,7 @@ export class BudgetLedger {
   }
 
   snapshot(): BudgetState { return structuredClone(this.state); }
+  freeze(reason: string): void { this.mutate(() => { this.state.frozenReason = reason; }); }
 
   private getReservation(id: string) {
     const reservation = this.state.reservations[id];

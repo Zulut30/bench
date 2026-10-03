@@ -14,8 +14,14 @@ const statusLabels: Record<string, string> = {
   passed: 'passed — пройдено', failed: 'failed — провал', pending: 'pending — ожидает судью',
   not_evaluated: 'not_evaluated — не оценено', budget_exhausted: 'budget_exhausted — лимит бюджета',
   technical_error: 'technical_error — техническая ошибка', limit_exceeded: 'limit_exceeded — лимит',
+  auth_missing: 'auth_missing — нет входа/ключа', auth_incompatible: 'auth_incompatible — неподходящий способ входа',
+  client_missing: 'client_missing — клиент не установлен', unsupported_client: 'unsupported_client — несовместимые флаги',
+  model_missing: 'model_missing — выберите model ID/endpoint', model_unavailable: 'model_unavailable — модель/endpoint недоступны',
+  quota_exhausted: 'quota_exhausted — квота исчерпана', timeout: 'timeout — время истекло', invalid_response: 'invalid_response — неверный JSON/JSONL',
+  isolation_unavailable: 'isolation_unavailable — нет файловой песочницы', route_changed: 'route_changed — изменён маршрут',
+  subscription_policy_unknown: 'subscription_policy_unknown — состояние usage credits неизвестно', not_comparable: 'условия несопоставимы',
   uncovered: 'не покрыто', evaluated: 'оценено', partial: 'частичное покрытие',
-  suspected: 'suspected — требуется повтор', improved: 'улучшение в демо', stable: 'без изменения',
+  suspected: 'suspected — требуется повтор', improved: 'улучшение', stable: 'без изменения',
 };
 const status = (value: string) => `<span class="tag ${escapeHtml(value)}">${escapeHtml(statusLabels[value] ?? value)}</span>`;
 const table = (heads: string[], rows: string[]) => `<div class="scroll"><table><thead><tr>${heads.map((h) => `<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table></div>`;
@@ -29,9 +35,11 @@ function document(title: string, body: string): string {
 }
 
 export function renderRun(run: SavedRun, summary: RunSummary): string {
+  if (run.manifest.schemaVersion === 2) return renderPilotRun(run, summary);
   const { manifest, attempts, calls } = run;
   const totals = summary.totals;
   const account = manifest.budget.runs[manifest.runId];
+  const limits = 'syntheticBudget' in manifest.config ? manifest.config.syntheticBudget : manifest.config.apiBudget;
   const months = Object.entries(manifest.budget.months).map(([month, a]) => `${escapeHtml(month)}: расход ${money(a.spentMicroUsd / 1e6)}, резерв ${money(a.reservedMicroUsd / 1e6)}`).join('; ');
   const body = `<p class="muted">Practical Model Bench · этап 1 · mock</p><h1>Демонстрационный запуск: ${escapeHtml(manifest.scenario)}</h1>
     <div class="banner">Синтетические ответы, токены и тарифы. Этот отчёт не измеряет качество реальных моделей. Фактические расходы API: <b>0 USD</b>. Субъективного судьи нет.</div>
@@ -48,7 +56,7 @@ export function renderRun(run: SavedRun, summary: RunSummary): string {
     ${table(['Модель: первые вызовы', 'Судья: первые вызовы', 'Повторы', 'Всего', 'Фактические API', 'Цена успешной попытки'], [row([sum(totals.costs.candidateInitial, true), sum(totals.costs.judgeInitial, true), sum(totals.costs.retries, true), sum(totals.costs.total, true), money(totals.incurredCostUsd), money(totals.costPerSuccessUsd)])])}
     <p>В цену успешной попытки включён судья (его вызовов ${totals.judgeCalls}); при неизвестных расходах или нуле успехов значение не определено. Все попытки выбранного набора входят в числитель. Расходы разработки в Codex здесь не учитываются.</p>
     <p>Уникальных вызовов: ${totals.callCount}; синтетических запросов: ${totals.simulatedRequests}; реальных API-запросов: ${totals.apiRequests}; технических повторов: ${totals.retryCalls}; локальных чтений кеша: ${totals.localCacheReads}; неполный usage: ${totals.incompleteUsageCalls}.</p>
-    <h2>Бюджет до запроса</h2><p>Синтетический журнал: расход ${money((account?.spentMicroUsd ?? 0) / 1e6)}, резерв ${money((account?.reservedMicroUsd ?? 0) / 1e6)}. Лимиты: запрос ${money(manifest.config.syntheticBudget.perRequestUsd)}, задача ${money(manifest.config.syntheticBudget.perTaskUsd)}, запуск ${money(manifest.config.syntheticBudget.runUsd)}, месяц ${money(manifest.config.syntheticBudget.monthUsd)}.</p>
+    <h2>Бюджет до запроса</h2><p>Синтетический журнал: расход ${money((account?.spentMicroUsd ?? 0) / 1e6)}, резерв ${money((account?.reservedMicroUsd ?? 0) / 1e6)}. Лимиты: запрос ${money(limits.perRequestUsd)}, задача ${money(limits.perTaskUsd)}, запуск ${money(limits.runUsd)}, месяц ${money(limits.monthUsd)}.</p>
     <p>${months}. Неизвестные начисления удерживают остаток резерва и требуют сверки. Реальный бюджет: лимит / расход / резерв — 0 / 0 / 0 USD.</p>
     <h2>Попытки и доказательства</h2>
     ${table(['Задание / попытка', 'Статус', 'Проверки', 'Артефакты'], attempts.map((a) => row([
@@ -67,16 +75,37 @@ export function renderRun(run: SavedRun, summary: RunSummary): string {
   return document(`Mock ${manifest.scenario} — Practical Model Bench`, body);
 }
 
+function renderPilotRun(run: SavedRun, summary: RunSummary): string {
+  const { manifest, calls, attempts } = run, totals = summary.totals;
+  const config = 'candidate' in manifest.config ? manifest.config : null;
+  const subscription = config?.candidate.subscription;
+  return document('Pilot — Practical Model Bench', `<p class="muted">${escapeHtml(manifest.mode)} · billingMode ${escapeHtml(manifest.billingMode)} · ${escapeHtml(manifest.conditions?.executionMode)}</p>
+    <h1>Практический pilot</h1><div class="banner">${manifest.synthetic ? 'Synthetic fixtures; это демонстрация, не качество реальной модели.' : 'Малый диагностический набор; результаты не дают уверенного рейтинга.'} Субъективный смысл и дизайн оцениваются отдельно слепым A/B; абсолютная оценка до калибровки pending. Backend проверяет JSON-контракт, сервер не запускается.</div>
+    <p>ID: <code>${escapeHtml(manifest.runId)}</code>; система: <code>${escapeHtml(manifest.model)}</code>. Клиент ${escapeHtml(manifest.conditions?.clientVersion ?? 'неизвестен')}. Вход ${escapeHtml(manifest.conditions?.authMethod ?? 'неизвестен')}. Изоляция ${escapeHtml(manifest.conditions?.isolation)}.</p>
+    <p>Применённая температура: ${manifest.generation.temperature ?? 'неизвестна'}; reasoning: ${escapeHtml(manifest.generation.reasoning ?? 'неизвестен')}. Запрошенные настройки сохранены отдельно в manifest.config. Гарантия лимита выхода: ${escapeHtml(manifest.conditions?.diagnostic.config.outputTokenLimit ?? (manifest.billingMode === 'api' ? 'API max_tokens' : 'fixtures/данные пользователя'))}.</p>
+    <div class="cards">${card('Задач / выполнено', `${summary.taskCount} / ${summary.executedTaskCount}`)}${card('Попыток / полных успехов', `${summary.plannedAttempts} / ${totals.successfulAttempts}`)}${card('Фактическое API списание', sum(totals.incurredCost, true))}${card('Предварительная / API-эквивалент оценка', sum(totals.costs.total, true))}</div>
+    <h2>Покрытие 16 категорий</h2>${table(['Категория', 'Задач', 'Покрытие', 'pass / fail / pending / пропуск', 'Авто pass rate', 'Итоговый pass rate', 'API по primaryCategory'], summary.categories.map((c) => row([escapeHtml(c.label), String(c.taskCount), status(c.coverage), `${c.passed}/${c.failed}/${c.pending}/${c.skipped}`, percentage(c.automatedPassRate), percentage(c.passRate), c.taskCount ? sum(c.primaryIncurredCostUsd, true) : '—'])))}
+    <h2>Расход и полнота</h2>${table(['input', 'output (включает reasoning)', 'reasoning', 'cache read', 'cache write', 'total'], [row([sum(totals.tokens.input), sum(totals.tokens.output), sum(totals.tokens.reasoning), sum(totals.tokens.cacheRead), sum(totals.tokens.cacheWrite), sum(totals.tokens.total)])])}
+    ${table(['Начисления модели', 'Судьи', 'Повторы', 'Всего', 'Фактическая цена полного успеха'], [row([sum(totals.actualCosts.candidateInitial, true), sum(totals.actualCosts.judgeInitial, true), sum(totals.actualCosts.retries, true), sum(totals.actualCosts.total, true), money(totals.incurredCostPerSuccessUsd)])])}
+    <p>Запросов API ${totals.apiRequests}; запусков подписочного CLI ${totals.subscriptionRuns}; наблюдаемых шагов ${sum(totals.agentSteps)}; неполный usage ${totals.incompleteUsageCalls}; неполный учёт внутренних повторов/usage ${totals.accountingIncompleteCalls}. Накопительная сводка клиента учитывается один раз.</p>
+    <p>Подписка: фиксированная месячная цена ${money(subscription?.fixedMonthlyUsd ?? null)}, доступные токены ${subscription?.availableTokens ?? 'неизвестны'}, известные ограничения ${escapeHtml(subscription?.knownLimits.join('; ') || 'неизвестны')}. Эти данные задаёт пользователь; цена подписки не распределяется как стоимость API вызова. Оценка клиента — API-эквивалент, а не списание.</p>
+    <h2>Бюджет до отправки</h2><p>API журнал: лимит ${money(manifest.realBudget.limitUsd)}, известный расход ${money(manifest.realBudget.spentUsd)}, удержанный резерв ${money(manifest.realBudget.reservedUsd)}. Неизвестное начисление требует сверки. Таймзона ${escapeHtml(manifest.timezone)}. Синтетические расходы хранятся отдельно.</p>
+    <h2>Попытки</h2>${table(['Задание', 'Статус', 'Проверки', 'Доказательства'], attempts.map((a) => row([escapeHtml(a.attemptId), status(a.status), a.checks.map((c) => `${escapeHtml(c.id)}: ${c.pass ? 'passed' : 'failed'} — ${escapeHtml(c.reason)}`).join('<br>') || escapeHtml(a.reason), a.artifacts.map((p) => link(p)).join('<br>')])))}
+    <h2>Маршрут и вызовы</h2>${table(['callId', 'requested / returned model', 'provider / generation ID', 'роль / повтор / шаги', 'начисление / оценка', 'артефакты'], calls.map((c) => row([escapeHtml(c.callId), `${escapeHtml(c.requestedModel)} / ${escapeHtml(c.returnedModel ?? 'неизвестна')}`, `${escapeHtml(c.returnedProvider ?? 'неизвестен')} / ${escapeHtml(c.generationId ?? 'неизвестен')}`, `${c.role}/${c.retryIndex}/${c.agentSteps ?? 'неизвестно'}`, `${money(c.incurredCostUsd)} / ${money(c.modeledCostUsd)}`, c.artifacts.map((p) => link(p)).join('<br>')])))}
+    <h2>Артефакты</h2><p>${manifest.artifacts.map((p) => link(p)).join(' · ')}</p><p>Скриншоты: Chromium ${escapeHtml(manifest.browser.version)}, Arial, 1440/390 px; JS отключён, сеть блокируется. Расходы разработки не входят в бенчмарк.</p>`);
+}
+
 export function renderComparison(comparison: Comparison): string {
-  const body = `<p class="muted">Practical Model Bench · mock · сравнение</p><h1>Baseline → current</h1>
+  const body = `<p class="muted">Practical Model Bench · ${escapeHtml(comparison.mode)} · сравнение</p><h1>Baseline → current</h1>
     <div class="banner">${escapeHtml(comparison.uncertainty)}</div>
     <p>Baseline: ${link(`../../${comparison.baselineRunId}/report.html`, comparison.baselineRunId)}<br>Current: ${link(`../../${comparison.currentRunId}/report.html`, comparison.currentRunId)}</p>
     <p>Тип сравнения: ${escapeHtml(comparison.comparisonKind)}. Совпадают настройки оболочки: ${comparison.shellCompatible ? 'да' : 'нет, сравнение систем'}. Набор изменился: ${comparison.suiteChanged ? 'да' : 'нет'}. Версия оценки совпадает: ${comparison.evaluationCompatible ? 'да' : 'нет'}.</p>
-    <div class="cards">${card('Совпавших / наблюдаемых задач', `${comparison.matchingTaskCount} / ${comparison.observedTaskCount}`)}${card('Пар оценённых попыток', String(comparison.pairedAttemptCount))}${card('Подозрительных изменений', String(comparison.tasks.filter((t) => t.status === 'suspected').length))}${card('Фактические расходы API', '0 USD')}</div>
+    <p>Условия совместимы: ${comparison.conditionsCompatible ? 'да' : 'нет'}; автоматический сигнал разрешён: ${comparison.regressionEligible ? 'да' : 'нет'}; маршрут изменился: ${comparison.routeChanged ? 'да' : 'нет'}; фактические маршруты подтверждены: ${comparison.routesVerified ? 'да' : 'нет'}. Маршруты: ${escapeHtml(JSON.stringify(comparison.routes))}.</p>
+    <div class="cards">${card('Совпавших / наблюдаемых задач', `${comparison.matchingTaskCount} / ${comparison.observedTaskCount}`)}${card('Пар оценённых попыток', String(comparison.pairedAttemptCount))}${card('Подозрительных изменений', String(comparison.tasks.filter((t) => t.status === 'suspected').length))}${card('Фактическое списание baseline / current', `${money(comparison.baseline.totals.incurredCostUsd)} / ${money(comparison.current.totals.incurredCostUsd)}`)}</div>
     <p>Исключённые задания: ${escapeHtml(comparison.excludedTaskIds.join(', ') || 'нет')}. Сравниваются совпадающие хеши задания, промпта, материалов, проверок и лимитов; пропуски не становятся провалами.</p>
     ${table(['Задание', 'Пар попыток / пропуски', 'Авто baseline', 'Авто current', 'Изменение', 'Сигнал'], comparison.tasks.map((t) => row([escapeHtml(t.title), `${t.pairedAttempts} / ${t.skippedPairs}`, percentage(t.baselineAutomatedPassRate), percentage(t.currentAutomatedPassRate), delta(t.deltaPercentagePoints), status(t.status)])))}
     <h2>Изменения по категориям</h2><p>Прочерк означает незавершённую оценку или отсутствие задач. Субъективная часть без судьи остаётся pending.</p>${table(['Категория', 'Задач', 'Итог baseline → current', 'Изменение итога', 'Авто baseline → current', 'Изменение авто', 'Итоговые баллы'], comparison.categories.map((c) => row([escapeHtml(c.label), String(c.tasks), `${percentage(c.baselinePassRate)} → ${percentage(c.currentPassRate)}`, delta(c.deltaPassRatePercentagePoints), `${percentage(c.baselineAutomatedPassRate)} → ${percentage(c.currentAutomatedPassRate)}`, delta(c.deltaAutomatedPercentagePoints), `${c.baselineScore === null ? '—' : c.baselineScore.toFixed(3)} → ${c.currentScore === null ? '—' : c.currentScore.toFixed(3)}`])))}
-    <h2>Сопоставимый набор: токены и синтетическая цена</h2>${table(['Показатель', 'Baseline', 'Current'], [
+    <h2>Сопоставимый набор: токены и оценка цены</h2>${table(['Показатель', 'Baseline', 'Current'], [
       row(['input', sum(comparison.baseline.totals.tokens.input), sum(comparison.current.totals.tokens.input)]),
       row(['output (включает reasoning)', sum(comparison.baseline.totals.tokens.output), sum(comparison.current.totals.tokens.output)]),
       row(['reasoning', sum(comparison.baseline.totals.tokens.reasoning), sum(comparison.current.totals.tokens.reasoning)]),
@@ -85,5 +114,6 @@ export function renderComparison(comparison: Comparison): string {
       row(['Цена успешной попытки', money(comparison.baseline.totals.costPerSuccessUsd), money(comparison.current.totals.costPerSuccessUsd)]),
     ])}<p>Изменение расходов: ${money(comparison.costDeltaUsd)}. При неполных начислениях точная разница не вычисляется.</p>
     <p>${link('comparison.json')} · ${link('integrity.json')}</p>`;
-  return document('Сравнение mock-запусков — Practical Model Bench', body);
+  const judging = comparison.judging ? `<h2>Слепой судья / ручная калибровка</h2><p>${link(`../../evaluations/${comparison.judging.id}/report.html`, 'Оценка и доказательства')}; версия ${escapeHtml(comparison.judging.version)}. Расход судьи включён в current отдельно от candidate. Абсолютные баллы остаются pending; A/B измеряет предпочтение. Споры порядка: ${escapeHtml(comparison.judging.orderDisputes.join(', ') || 'нет')}.</p>${table(['Пара', 'Статус', 'Предпочтение', 'Обоснование'], comparison.judging.pairs.map((p) => row([escapeHtml(p.id), status(p.status), escapeHtml(p.winner ?? 'pending'), escapeHtml(p.reason)])))}` : '';
+  return document('Сравнение запусков — Practical Model Bench', body + judging);
 }

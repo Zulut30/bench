@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "suite": "benchmarks/pilot.json",
+  "timezone": "Europe/Warsaw",
+  "candidate": {
+    "provider": "openrouter",
+    "model": null,
+    "providerEndpoint": null,
+    "executionMode": "model-only"
+  },
+  "judges": {
+    "text": null,
+    "vision": null,
+    "version": "blind-ab-rubric-1"
+  },
+  "apiBudget": {
+    "perRequestUsd": 0.05,
+    "perTaskUsd": 0.15,
+    "runUsd": 0,
+    "monthUsd": 1
+  },
+  "generation": {
+    "temperature": 0,
+    "reasoning": "none"
+  },
+  "limits": {
+    "attempts": 1,
+    "timeoutMs": 60000,
+    "maxAgentTurns": 4,
+    "maxRetries": 1,
+    "maxOutputTokens": 2048,
+    "maxJudgeCalls": 2
+  }
+}

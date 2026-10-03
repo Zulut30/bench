@@ -1,0 +1,323 @@
+{
+  "id": "practical-pilot",
+  "version": "pilot-1",
+  "evaluationVersion": "pilot-checks-2",
+  "tasks": [
+    {
+      "id": "contact-form",
+      "version": "1.0.0",
+      "title": "Форма обратной связи",
+      "primaryCategory": "frontend",
+      "evaluationCategories": [
+        "frontend",
+        "instruction-following"
+      ],
+      "difficulty": "easy",
+      "prompt": "Верни полный HTML-документ с формой обратной связи. Поле email с видимой связанной подписью обязательно, использует встроенную email-валидацию браузера; textarea «Сообщение» обязательна. Есть кнопка отправки. Документ работает при ширине 390 и 1440 px без горизонтальной прокрутки. Только HTML/CSS, без JavaScript, внешних ресурсов и Markdown.",
+      "materials": [
+        {
+          "id": "source",
+          "content": "Шаблон проекта: <!doctype html><html lang=\"ru\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"></head><body><main><!-- реализуй форму --></main></body></html>. Зависимостей нет; браузер Chromium, системный шрифт Arial."
+        }
+      ],
+      "successCriteria": [
+        "Обязательные email/сообщение, нативная валидация и адаптивность.",
+        "Выполнен формат ответа"
+      ],
+      "criticalRequirements": [
+        "Обязательные email/сообщение, нативная валидация и адаптивность."
+      ],
+      "checks": [
+        {
+          "id": "behavior",
+          "evaluator": "contact-form",
+          "category": "frontend",
+          "critical": true,
+          "weight": 1
+        },
+        {
+          "id": "format",
+          "evaluator": "output-format",
+          "category": "instruction-following",
+          "critical": true,
+          "weight": 1
+        }
+      ],
+      "rubric": {
+        "version": "demo-rubric-1",
+        "categories": [],
+        "criteria": []
+      },
+      "manualRequired": false,
+      "passThreshold": 1,
+      "limits": {
+        "maxInputTokens": 65536,
+        "maxOutputTokens": 2048,
+        "timeoutMs": 60000,
+        "maxCalls": 2,
+        "maxRetries": 1,
+        "maxSteps": 4,
+        "attempts": 1,
+        "maxJudgeCalls": 2
+      },
+      "reference": null,
+      "readiness": "enabled"
+    },
+    {
+      "id": "pagination",
+      "version": "1.0.0",
+      "title": "JSON-контракт пагинации (не запуск сервера)",
+      "primaryCategory": "backend",
+      "evaluationCategories": [
+        "backend",
+        "instruction-following"
+      ],
+      "difficulty": "medium",
+      "prompt": "По заданным данным верни JSON-ответ GET /orders?offset=1&limit=2: {items: массив объектов id/amount, total: общее число, nextOffset: число или null}. Сортировка по id по возрастанию, offset начиная с 0. Суммы менять нельзя. Никакого Markdown.",
+      "materials": [
+        {
+          "id": "source",
+          "content": "Неизменяемые записи: [{\"id\":4,\"amount\":40},{\"id\":2,\"amount\":20},{\"id\":1,\"amount\":10},{\"id\":3,\"amount\":30}]. offset=1, limit=2. Ожидается контракт ответа, сервер в этом демо не запускается."
+        }
+      ],
+      "successCriteria": [
+        "Порядок, правильный срез и total/nextOffset.",
+        "Выполнен формат ответа"
+      ],
+      "criticalRequirements": [
+        "Порядок, правильный срез и total/nextOffset."
+      ],
+      "checks": [
+        {
+          "id": "behavior",
+          "evaluator": "pagination",
+          "category": "backend",
+          "critical": true,
+          "weight": 1
+        },
+        {
+          "id": "format",
+          "evaluator": "output-format",
+          "category": "instruction-following",
+          "critical": true,
+          "weight": 1
+        }
+      ],
+      "rubric": {
+        "version": "demo-rubric-1",
+        "categories": [],
+        "criteria": []
+      },
+      "manualRequired": false,
+      "passThreshold": 1,
+      "limits": {
+        "maxInputTokens": 65536,
+        "maxOutputTokens": 2048,
+        "timeoutMs": 60000,
+        "maxCalls": 2,
+        "maxRetries": 1,
+        "maxSteps": 4,
+        "attempts": 1,
+        "maxJudgeCalls": 2
+      },
+      "reference": null,
+      "readiness": "enabled"
+    },
+    {
+      "id": "maintenance-notice",
+      "version": "1.0.0",
+      "title": "Уведомление о работах",
+      "primaryCategory": "writing",
+      "evaluationCategories": [
+        "writing",
+        "instruction-following"
+      ],
+      "difficulty": "easy",
+      "prompt": "Напиши краткое уведомление по источнику на русском: заголовок «Плановые работы», дата в формате ДД.ММ.ГГГГ, интервал и таймзона, недоступная функция и ссылка поддержки. 35–80 слов. Все числа бери из источника.",
+      "materials": [
+        {
+          "id": "source",
+          "content": "План обслуживания: 12.10.2026; с 02:00 до 02:30 UTC; недоступен экспорт CSV; остальные функции работают; поддержка help@example.test; продолжительность 30 минут."
+        }
+      ],
+      "successCriteria": [
+        "Факты и числа из источника; заголовок; контакты; 35–80 слов.",
+        "Выполнен формат ответа"
+      ],
+      "criticalRequirements": [
+        "Факты и числа из источника; заголовок; контакты; 35–80 слов."
+      ],
+      "checks": [
+        {
+          "id": "behavior",
+          "evaluator": "maintenance-notice",
+          "category": "writing",
+          "critical": true,
+          "weight": 1
+        },
+        {
+          "id": "format",
+          "evaluator": "output-format",
+          "category": "instruction-following",
+          "critical": true,
+          "weight": 1
+        }
+      ],
+      "rubric": {
+        "version": "demo-rubric-1",
+        "categories": [
+          "writing"
+        ],
+        "criteria": [
+          "Ясность уведомления",
+          "Тон без лишней тревоги"
+        ]
+      },
+      "manualRequired": true,
+      "passThreshold": 1,
+      "limits": {
+        "maxInputTokens": 65536,
+        "maxOutputTokens": 2048,
+        "timeoutMs": 60000,
+        "maxCalls": 2,
+        "maxRetries": 1,
+        "maxSteps": 4,
+        "attempts": 1,
+        "maxJudgeCalls": 2
+      },
+      "reference": null,
+      "readiness": "enabled"
+    },
+    {
+      "id": "translation-en",
+      "version": "1.0.0",
+      "title": "Локализация уведомления EN",
+      "primaryCategory": "translation",
+      "evaluationCategories": [
+        "translation",
+        "instruction-following"
+      ],
+      "difficulty": "easy",
+      "prompt": "Переведи исходник на английский. Сохрани все числа и время, глоссарий и контакт. Только перевод, без Markdown. Допустимы эквивалентные формулировки.",
+      "materials": [
+        {
+          "id": "source",
+          "content": "Исходник: «Плановые работы 12.10.2026 с 02:00 до 02:30 UTC. Экспорт CSV будет недоступен. Поддержка: help@example.test». Глоссарий: Плановые работы → Scheduled maintenance; Экспорт CSV → CSV export; Поддержка → Support. Дата в переводе: 12 October 2026."
+        }
+      ],
+      "successCriteria": [
+        "Смысл, отрицание, время/дата/контакты, глоссарий.",
+        "Выполнен формат ответа"
+      ],
+      "criticalRequirements": [
+        "Смысл, отрицание, время/дата/контакты, глоссарий."
+      ],
+      "checks": [
+        {
+          "id": "behavior",
+          "evaluator": "translation-en",
+          "category": "translation",
+          "critical": true,
+          "weight": 1
+        },
+        {
+          "id": "format",
+          "evaluator": "output-format",
+          "category": "instruction-following",
+          "critical": true,
+          "weight": 1
+        }
+      ],
+      "rubric": {
+        "version": "demo-rubric-1",
+        "categories": [
+          "translation"
+        ],
+        "criteria": [
+          "Естественность английского",
+          "Полнота и смысл перевода"
+        ]
+      },
+      "manualRequired": true,
+      "passThreshold": 1,
+      "limits": {
+        "maxInputTokens": 65536,
+        "maxOutputTokens": 2048,
+        "timeoutMs": 60000,
+        "maxCalls": 2,
+        "maxRetries": 1,
+        "maxSteps": 4,
+        "attempts": 1,
+        "maxJudgeCalls": 2
+      },
+      "reference": null,
+      "readiness": "enabled"
+    },
+    {
+      "id": "pricing-layout",
+      "version": "1.0.0",
+      "title": "Страница тарифов",
+      "primaryCategory": "ui-design",
+      "evaluationCategories": [
+        "ui-design",
+        "instruction-following"
+      ],
+      "difficulty": "medium",
+      "prompt": "Создай полный HTML/CSS макет страницы «Тарифы» с тремя карточками из материала и кнопками «Выбрать». Один h1, читаемые заголовки карточек, порядок карточек сохранён. При 390 px одна колонка, при 1440 px три. Без JS, внешних ресурсов и Markdown.",
+      "materials": [
+        {
+          "id": "source",
+          "content": "HTML-проект без зависимостей; lang=ru, meta viewport; Arial. Данные: Старт — 0 USD/месяц; Команда — 12 USD/месяц; Бизнес — 40 USD/месяц. Обёртка карточки article. Скриншоты: Chromium, 1440×900 и 390×844."
+        }
+      ],
+      "successCriteria": [
+        "Содержимое и число карточек; реальная адаптивная раскладка.",
+        "Выполнен формат ответа"
+      ],
+      "criticalRequirements": [
+        "Содержимое и число карточек; реальная адаптивная раскладка."
+      ],
+      "checks": [
+        {
+          "id": "behavior",
+          "evaluator": "pricing-layout",
+          "category": "ui-design",
+          "critical": true,
+          "weight": 1
+        },
+        {
+          "id": "format",
+          "evaluator": "output-format",
+          "category": "instruction-following",
+          "critical": true,
+          "weight": 1
+        }
+      ],
+      "rubric": {
+        "version": "demo-rubric-1",
+        "categories": [
+          "ui-design"
+        ],
+        "criteria": [
+          "Визуальная иерархия",
+          "Композиция и отступы",
+          "Читаемость и контраст"
+        ]
+      },
+      "manualRequired": true,
+      "passThreshold": 1,
+      "limits": {
+        "maxInputTokens": 65536,
+        "maxOutputTokens": 2048,
+        "timeoutMs": 60000,
+        "maxCalls": 2,
+        "maxRetries": 1,
+        "maxSteps": 4,
+        "attempts": 1,
+        "maxJudgeCalls": 2
+      },
+      "reference": null,
+      "readiness": "enabled"
+    }
+  ]
+}

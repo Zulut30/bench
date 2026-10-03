@@ -25,3 +25,14 @@ export async function withoutNetwork<T>(action: () => Promise<T>): Promise<T> {
     syncBuiltinESMExports();
   }
 }
+
+// В реальном режиме движок может обращаться только к явно выбранному публичному API.
+export async function withApiNetwork<T>(baseUrl: string, action: () => Promise<T>): Promise<T> {
+  const original = globalThis.fetch;
+  globalThis.fetch = (input, init) => {
+    const url = input instanceof Request ? input.url : String(input);
+    if (!url.startsWith(`${baseUrl}/`)) return Promise.reject(new Error('Внешний запрос вне выбранного API запрещён'));
+    return original(input, init);
+  };
+  try { return await action(); } finally { globalThis.fetch = original; }
+}

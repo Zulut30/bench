@@ -26,6 +26,25 @@ function formatCheck(task: Task, output: string): boolean {
 const numericTokens = (value: string) => value.match(/\d+(?:[.:]\d+)*/g) ?? [];
 const onlyNumbers = (output: string, allowed: string[]) => numericTokens(output).every((n) => allowed.includes(n));
 
+export function maintenanceCheck(output: string): { pass: boolean; reason: string; semanticStatus: 'pending' | 'contradiction' } {
+  const words = output.trim().split(/\s+/).length;
+  const objective = /^Плановые работы\s*\n/u.test(output) && words >= 35 && words <= 80
+    && ['12.10.2026', '02:00', '02:30', 'UTC', 'CSV', 'help@example.test'].every((s) => output.includes(s))
+    && onlyNumbers(output, ['12.10.2026', '02:00', '02:30', '30']);
+  // Это детектор явных противоречий, а не доказательство сохранения смысла.
+  const clauses = output.toLowerCase().split(/[.!?\n]|(?<!\p{L})(?:но|однако)(?!\p{L})/u);
+  const contradiction = clauses.some((clause) =>
+    (/(?:остальн\S*|друг\S*|все)\s+(?:функци\S*|возможност\S*|сервис\S*)/u.test(clause)
+      || /остальн\S*\s+функци\S*/iu.test(output) && /^\s*(?:они|эти функции)(?!\p{L})/u.test(clause))
+      && /(?<!\p{L})не\s+(?:будут\s+|продолжат\s+)?работ|недоступ|отключ|перестан\S*\s+работ|прекрат\S*\s+работ/u.test(clause)
+      && !/не\s+(?:перестан\S*\s+работ|прекрат\S*\s+работ)|не\s+будут\s+(?:недоступ|отключ)/u.test(clause)
+    || /экспорт\s+csv/u.test(clause) && /(?:будет|оста[её]тся|полностью)\s+доступен|не\s+(?:будет\s+)?(?:недоступен|отключ[её]н)/u.test(clause));
+  return { pass: objective && !contradiction, semanticStatus: contradiction ? 'contradiction' : 'pending',
+    reason: contradiction ? 'Обнаружено явное противоречие исходным фактам'
+      : objective ? 'Формат, длина, числа и обязательные элементы выполнены; сохранение смысла pending, требуется судья'
+      : 'Нарушены ограничения формата, длины, чисел или обязательных элементов; смысл pending' };
+}
+
 export function checkText(evaluator: string, output: string): { pass: boolean; reason: string } {
   let pass = false;
   switch (evaluator) {
@@ -42,15 +61,7 @@ export function checkText(evaluator: string, output: string): { pass: boolean; r
         && parsed.data.body.fields.some((f) => f.field === 'age' && f.code === 'MIN_18') && !output.includes('invalid-secret');
       break;
     }
-    case 'maintenance-notice': {
-      const words = output.trim().split(/\s+/).length;
-      pass = /^Плановые работы\s*\n/u.test(output) && words >= 35 && words <= 80
-        && ['12.10.2026', '02:00', '02:30', 'UTC', 'CSV', 'help@example.test'].every((s) => output.includes(s))
-        && /экспорт CSV[^.!\n]{0,50}(?:не\s*доступен|недоступен)/iu.test(output)
-        && /остальные функции[^.!\n]{0,50}работают|остальные функции[^.!\n]{0,50}работать/iu.test(output)
-        && onlyNumbers(output, ['12.10.2026', '02:00', '02:30', '30']);
-      break;
-    }
+    case 'maintenance-notice': return maintenanceCheck(output);
     case 'release-notes':
       pass = /^Версия 1\.4\.0\s*\n/u.test(output) && (output.match(/^\s*[-*]\s+.+$/gm)?.length ?? 0) === 3
         && /добавлен[^\n]*CSV/iu.test(output) && /исправлен[^\n]*фильтр[^\n]*обновлен/iu.test(output)
