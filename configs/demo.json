@@ -1,0 +1,10 @@
+{
+  "mode": "mock",
+  "realBudgetUsd": 0,
+  "timezone": "Europe/Warsaw",
+  "syntheticBudget": { "perRequestUsd": 0.02, "perTaskUsd": 0.1, "runUsd": 0.5, "monthUsd": 10 },
+  "tariff": {
+    "id": "mock-synthetic-usd", "version": "1", "asOf": "2026-10-03", "currency": "USD", "synthetic": true,
+    "inputPerMillion": 1, "cacheReadPerMillion": 0.25, "cacheWritePerMillion": 1.25, "outputPerMillion": 3
+  }
+}
