@@ -6,6 +6,8 @@ import type { Browser } from 'playwright';
 import { z } from 'zod';
 import type { Task } from './schema.js';
 import type { Assessment, AttemptStatus, CheckResult } from './types.js';
+import type { RunConfig } from './connections/config.js';
+import { evaluateCode } from './sandbox.js';
 
 const htmlTasks = new Set(['contact-form', 'faq-disclosure', 'pricing-layout', 'dashboard-layout']);
 export function isHtmlTask(task: Task): boolean { return htmlTasks.has(task.id); }
@@ -85,6 +87,23 @@ export function checkText(evaluator: string, output: string): { pass: boolean; r
 }
 
 function parseJson(output: string): unknown { try { return JSON.parse(output); } catch { return null; } }
+export function practicalText(task: Task, output: string): { pass: boolean; reason: string } {
+  if (task.primaryCategory === 'writing') return maintenanceCheck(output);
+  if (task.primaryCategory === 'editing') return checkText('release-notes', output);
+  if (task.primaryCategory === 'translation') return checkText('translation-en', output);
+  let pass = false;
+  if (task.primaryCategory === 'architecture') {
+    const parsed = z.strictObject({ storage: z.enum(['PostgreSQL', 'MySQL']), queue: z.string(), idempotency: z.string(), retries: z.string(), backup: z.string(), rationale: z.string().min(20) }).safeParse(parseJson(output));
+    pass = parsed.success && /outbox/i.test(parsed.data.queue) && /eventId/i.test(parsed.data.idempotency)
+      && /3/.test(parsed.data.retries) && /dead.?letter/i.test(parsed.data.retries)
+      && /ежеднев/i.test(parsed.data.backup) && /restore|восстановлен/iu.test(parsed.data.backup);
+  } else if (task.primaryCategory === 'long-context') {
+    pass = z.strictObject({ ticket: z.literal('T-042'), owner: z.literal('Ирина'), due: z.literal('2026-10-12'), risk: z.literal('DNS') }).safeParse(parseJson(output)).success;
+  } else if (task.primaryCategory === 'instruction-following') {
+    pass = z.strictObject({ ids: z.tuple([z.literal(2), z.literal(4)]), total: z.literal(60) }).safeParse(parseJson(output)).success;
+  }
+  return { pass, reason: pass ? 'Формат и фиксированные факты выполнены; субъективная часть по рубрике отдельно' : 'Нарушены формат или фиксированные факты/ограничения' };
+}
 
 export class BrowserChecks {
   private browser: Browser | null = null;
@@ -192,10 +211,12 @@ export class BrowserChecks {
   }
 }
 
-export async function evaluateChecks(task: Task, output: string, browser: BrowserChecks, dir: string, attemptId: string): Promise<CheckResult[]> {
+export async function evaluateChecks(task: Task, output: string, browser: BrowserChecks, dir: string, attemptId: string,
+  sandbox: RunConfig['sandbox'] = { image: 'practical-bench-sandbox:1', dockerContext: null }, signal?: AbortSignal): Promise<CheckResult[]> {
+  if (task.execution) return evaluateCode(task, output, dir, attemptId, sandbox, signal);
   const results: CheckResult[] = [];
   for (const check of task.checks) {
-    const result = check.evaluator === 'output-format'
+    const result = check.evaluator === 'practical-text' ? { ...practicalText(task, output), evidence: [] } : check.evaluator === 'output-format'
       ? { pass: formatCheck(task, output), reason: 'Проверка формата ответа', evidence: [] }
       : isHtmlTask(task) ? await browser.check(task, output, dir, attemptId)
       : { ...checkText(check.evaluator, output), evidence: [] };

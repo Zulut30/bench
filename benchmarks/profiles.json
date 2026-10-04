@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "smoke": [
+    "v1-frontend",
+    "v1-backend",
+    "v1-sql",
+    "v1-writing",
+    "v1-translation",
+    "v1-instruction-following"
+  ],
+  "standard": [
+    "v1-frontend",
+    "v1-backend",
+    "v1-ui-design",
+    "v1-sql",
+    "v1-algorithms",
+    "v1-debugging",
+    "v1-refactoring",
+    "v1-test-writing",
+    "v1-architecture",
+    "v1-devops",
+    "v1-security",
+    "v1-writing",
+    "v1-editing",
+    "v1-translation",
+    "v1-long-context",
+    "v1-instruction-following"
+  ]
+}

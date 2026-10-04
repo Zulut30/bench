@@ -2,7 +2,7 @@ import { chmodSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ProviderId } from '../src/connections/config.js';
 
-export function fakeCli(dir: string, provider: ProviderId, scenario: string, protectedFile: string) {
+export function fakeCli(dir: string, provider: ProviderId, scenario: string, protectedFile: string, answer?: string) {
   const executable = join(dir, `${provider}-${scenario}.cjs`), clientHome = join(dir, `${provider}-${scenario}-home`);
   const record = join(provider === 'gemini-cli' ? join(clientHome, '.gemini') : clientHome, 'requests.jsonl');
   mkdirSync(clientHome);
@@ -29,7 +29,7 @@ let input=''; process.stdin.on('data',b=>input+=b); process.stdin.on('end',()=>{
  if(scenario==='bad-json') { console.log('{broken'); return; }
  const failed=scenario==='auth-error'||scenario==='quota'||scenario==='model-error';
  const message=scenario==='quota'?'Usage quota exhausted':scenario==='model-error'?'Unknown model, unavailable':'Authentication required';
- const output='{"total":4,"page":2,"pageSize":2,"items":[{"id":2,"amount":20},{"id":3,"amount":30}]}';
+ const output=${JSON.stringify(answer ?? '{"total":4,"page":2,"pageSize":2,"items":[{"id":2,"amount":20},{"id":3,"amount":30}]}')};
  if(provider==='codex-cli') {
   if(failed) { json({type:'error',message}); process.exitCode=1; return; }
   json({type:'thread.started',thread_id:'new-'+Math.random()}); json({type:'turn.started'});

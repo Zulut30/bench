@@ -7,7 +7,7 @@ import type { ConnectionStatus, Diagnostic } from './connections/types.js';
 
 export type Scenario = 'baseline' | 'current';
 export type EvaluationStatus = 'passed' | 'failed' | 'pending' | 'not_evaluated';
-export type AttemptStatus = EvaluationStatus | 'budget_exhausted' | Exclude<ConnectionStatus, 'ok'>;
+export type AttemptStatus = EvaluationStatus | 'budget_exhausted' | 'in_doubt' | Exclude<ConnectionStatus, 'ok'>;
 export interface CheckResult {
   id: string; category: CategoryId; critical: boolean; weight: number;
   pass: boolean; score: number; reason: string; evidence: string[];
@@ -23,6 +23,7 @@ export interface AttemptRecord {
   checks: CheckResult[]; assessments: Assessment[]; callIds: string[];
   elapsedMs: number; reason: string; artifacts: string[];
   promptfooSuccess: boolean | null;
+  generationElapsedMs?: number | null; checksElapsedMs?: number;
 }
 export interface CallRecord {
   runId: string; taskId: string; attemptId: string; callId: string;
@@ -50,7 +51,8 @@ export interface Manifest {
   evaluationVersion: string; shellVersion: string; model: string;
   generation: { temperature: number | null; reasoning: string | null; cache: false };
   environment: { node: string; platform: string; arch: string; commit: string | null; dependencies: Record<string, string>; lockfileHash: string; implementationHash: string };
-  browser: { engine: 'chromium'; version: string; viewports: number[]; font: string; javaScriptEnabled: false; network: 'blocked' };
+  browser: { engine: 'chromium'; version: string; viewports: number[]; font: string; javaScriptEnabled: boolean; network: 'blocked' };
+  execution?: { imageId: string | null; checkerHash: string; network: 'none'; candidateUid: number; cpu: number; memoryMb: number; pids: number };
   config: DemoConfig | RunConfig; budget: BudgetState;
   realBudget: { limitUsd: number; spentUsd: number; reservedUsd: number };
   billingMode?: BillingMode; conditions?: { provider: ProviderId; executionMode: 'model-only' | 'agent';

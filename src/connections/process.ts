@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import { accessSync, constants, existsSync, realpathSync, writeFileSync } from 'node:fs';
 import { delimiter, dirname, join, relative, resolve } from 'node:path';
 import { homedir } from 'node:os';
+import { StringDecoder } from 'node:string_decoder';
 import type { ConnectionStatus } from './types.js';
 
 export function executablePath(name: string, excludedRoots: string[] = []): string | null {
@@ -41,6 +42,8 @@ export async function executeProcess(executable: string, args: string[], options
   return new Promise((resolveResult) => {
     const child = spawn(executable, args, { cwd: options.cwd, env: options.env, shell: false, stdio: ['pipe', 'pipe', 'pipe'], detached: process.platform !== 'win32' });
     let stdout = '', stderr = '', pending = '', status: ConnectionStatus = 'ok', settled = false;
+    const outDecoder = new StringDecoder('utf8'), errDecoder = new StringDecoder('utf8');
+    let outBytes = 0, errBytes = 0;
     let killTimer: ReturnType<typeof setTimeout> | undefined;
     const kill = (next: ConnectionStatus) => {
       if (status !== 'ok') return;
@@ -52,18 +55,27 @@ export async function executeProcess(executable: string, args: string[], options
     const abort = () => kill('timeout');
     options.signal?.addEventListener('abort', abort, { once: true });
     if (options.signal?.aborted) abort();
-    child.stdout.on('data', (buffer: Buffer) => {
-      const data = buffer.toString('utf8'); stdout += data; pending += data;
-      if (Buffer.byteLength(stdout) > 8_000_000) { stdout = stdout.slice(0, 8_000_000); kill('limit_exceeded'); }
+    const consume = (data: string, final = false) => {
+      stdout += data; pending += data;
       const lines = pending.split('\n'); pending = lines.pop() ?? '';
+      if (final && pending) { lines.push(pending); pending = ''; }
       for (const line of lines) if (line && options.onLine) {
         try { const next = options.onLine(line); if (next) kill(next); } catch { kill('invalid_response'); }
       }
+    };
+    child.stdout.on('data', (buffer: Buffer) => {
+      const accepted = buffer.subarray(0, Math.max(0, 8_000_000 - outBytes)); outBytes += buffer.length;
+      consume(outDecoder.write(accepted));
+      if (outBytes > 8_000_000) kill('limit_exceeded');
     });
-    child.stderr.on('data', (buffer: Buffer) => { stderr += buffer.toString('utf8'); if (stderr.length > 1_000_000) { stderr = stderr.slice(0, 1_000_000); kill('limit_exceeded'); } });
+    child.stderr.on('data', (buffer: Buffer) => {
+      const accepted = buffer.subarray(0, Math.max(0, 1_000_000 - errBytes)); errBytes += buffer.length;
+      stderr += errDecoder.write(accepted); if (errBytes > 1_000_000) kill('limit_exceeded');
+    });
     child.stdin.on('error', () => { /* Клиент может завершиться до чтения stdin. */ });
     const finish = (code: number | null) => {
       if (settled) return; settled = true; clearTimeout(timer); if (killTimer) clearTimeout(killTimer);
+      consume(outDecoder.end(), true); stderr += errDecoder.end();
       options.signal?.removeEventListener('abort', abort);
       resolveResult({ stdout, stderr, code, status });
     };

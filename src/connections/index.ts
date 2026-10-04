@@ -19,6 +19,14 @@ export class MockConnection implements ModelConnection {
   tariff() { return loadInputs().config.tariff; }
   upperBound() { return { perCallUsd: 0, attemptUsd: 0 }; }
   async execute(request: ConnectionRequest): Promise<ConnectionResult> {
+    if (request.taskId.startsWith('v1-')) {
+      const fixture = (readJson(join(projectRoot, 'fixtures/standard-examples.json')) as Record<string, { correctAlternatives: string[] }>)[request.taskId];
+      if (!fixture) return { ...emptyResult(), sent: false, status: 'model_unavailable', reason: 'Нет standard fixture' };
+      const rawUsage = { inputTokens: Buffer.byteLength(request.prompt), outputTokens: 512, reasoningTokens: 32, cacheReadTokens: 0, cacheWriteTokens: 0 };
+      return { ...emptyResult(), output: fixture.correctAlternatives[(request.attemptIndex - 1) % fixture.correctAlternatives.length]!,
+        raw: { synthetic: true, fixtureVersion: 'standard-validation-1' }, rawUsage, usage: normalizeMockUsage(rawUsage),
+        returnedModel: 'mock-practical-v1', returnedProvider: 'local-mock', agentSteps: 1, internalRetries: 0, usageScope: 'request' };
+    }
     const response = responsesSchema.parse(readJson(join(projectRoot, 'fixtures/mock-responses.json')))[request.taskId];
     if (!response) return { ...emptyResult(), status: 'model_unavailable', reason: 'Нет демонстрационной fixture', sent: false };
     const rawUsage = mockUsage(request.taskId, 1).raw;

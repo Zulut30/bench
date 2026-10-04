@@ -15,6 +15,7 @@ export interface ConnectionRequest {
   maxAgentTurns: number; temperature: number; reasoning: string;
   images: Array<{ label: string; dataUrl: string }>;
   signal?: AbortSignal;
+  onGenerationId?: (id: string) => void;
 }
 export interface ConnectionResult {
   status: ConnectionStatus; reason: string; output: string | null; raw: unknown;
@@ -27,6 +28,8 @@ export interface ModelConnection {
   readonly config: ConnectionConfig;
   diagnose(): Promise<Diagnostic>;
   execute(request: ConnectionRequest): Promise<ConnectionResult>;
-  upperBound(maxOutputTokens: number, images: number): { perCallUsd: number; attemptUsd: number } | null;
+  upperBound(maxOutputTokens: number, images: number, request?: Pick<ConnectionRequest, 'prompt' | 'images'>): ReservationBound | null;
   tariff(): Tariff | null;
 }
+export interface ReservationBound { perCallUsd: number; attemptUsd: number; inputTokens?: number; outputTokens?: number;
+  method?: 'raw-byte-bpe' | 'endpoint-context'; explanation?: string; feesUsd?: number; }

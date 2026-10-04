@@ -19,7 +19,7 @@ describe('Синтетический бюджет до запроса', () => {
   ] as const)('атомарно отказывает по каждому уровню %j', (override, amount, reason) => {
     const ledger = new BudgetLedger({ ...limits, ...override }, 'Europe/Warsaw');
     const before = ledger.snapshot();
-    expect(ledger.reserve('run', 'task', { perCallUsd: amount, attemptUsd: amount }, now)).toEqual({ allowed: false, reason });
+    expect(ledger.reserve('run', 'task', { perCallUsd: amount, attemptUsd: amount }, now)).toMatchObject({ allowed: false, reason, details: { nextUsd: amount } });
     expect(ledger.snapshot()).toEqual(before);
   });
   it('учитывает выполняющиеся запросы и не даёт перерасхода конкурирующим Promise', async () => {
@@ -65,6 +65,20 @@ describe('Синтетический бюджет до запроса', () => {
     const id = reserve(ledger, 0.25);
     expect(() => ledger.charge(id, 0.26)).toThrow('верхнюю границу');
     expect(ledger.snapshot().runs.run?.reservedMicroUsd).toBe(250000);
+  });
+  it('повторно проверяет верхнюю цену перед dispatch существующего резерва', () => {
+    const ledger = new BudgetLedger(limits, 'Europe/Warsaw'), id = reserve(ledger, 0.25);
+    expect(ledger.validateReservation(id, { perCallUsd: 0.2, attemptUsd: 0.2 })).toMatchObject({ allowed: true });
+    expect(ledger.validateReservation(id, { perCallUsd: 0.3, attemptUsd: 0.3 })).toMatchObject({ allowed: false, details: { scope: 'reservation', reservedUsd: 0.25, nextUsd: 0.3 } });
+    expect(ledger.validateReservation(id, null)).toMatchObject({ allowed: false });
+    ledger.charge(id, null); expect(ledger.validateReservation(id, { perCallUsd: 0.1, attemptUsd: 0.1 })).toMatchObject({ allowed: false });
+    expect(ledger.snapshot().runs.run?.reservedMicroUsd).toBe(250000);
+  });
+  it('сохранённый резерв прошлого месяца не разрешает dispatch за счёт старого месячного лимита', () => {
+    const ledger = new BudgetLedger(limits,'UTC');
+    const d = ledger.reserve('old','task',{perCallUsd:0.1,attemptUsd:0.1},new Date('2026-09-30T23:59:59Z'));if(!d.allowed)throw Error('fixture');
+    expect(ledger.validateReservation(d.reservationId,{perCallUsd:0.1,attemptUsd:0.1},new Date('2026-10-01T00:00:01Z'))).toMatchObject({allowed:false,reason:expect.stringContaining('месяцу')});
+    expect(ledger.snapshot().months['2026-09']?.reservedMicroUsd).toBe(100000);
   });
   it('при ошибке сохранения не выдаёт разрешение и откатывает память', () => {
     const ledger = new BudgetLedger(limits, 'Europe/Warsaw', undefined, () => { throw new Error('disk full'); });

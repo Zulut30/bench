@@ -1,0 +1,210 @@
+{
+  "v1-frontend": {
+    "taskVersion": "1.0.0",
+    "correctAlternatives": [
+      "{\"files\": [{\"path\": \"index.html\", \"content\": \"<!doctype html><html lang=\\\"ru\\\"><meta charset=\\\"utf-8\\\"><meta name=\\\"viewport\\\" content=\\\"width=device-width,initial-scale=1\\\"><link rel=\\\"stylesheet\\\" href=\\\"styles.css\\\"><main><h1>Новости проекта</h1><form novalidate><label for=\\\"email\\\">Email</label><input id=\\\"email\\\" type=\\\"email\\\"><button type=\\\"submit\\\">Подписаться</button><p role=\\\"status\\\" aria-live=\\\"polite\\\"></p></form></main><script type=\\\"module\\\" src=\\\"app.js\\\"></script></html>\"}, {\"path\": \"app.ts\", \"content\": \"const form = document.querySelector('form')!; const email = document.querySelector<HTMLInputElement>('#email')!; const status = document.querySelector<HTMLElement>('[role=status]')!;form.addEventListener('submit',e=>{e.preventDefault();const value=email.value.trim();if(!value){status.textContent='Введите email';return;}if(!/^[^\\\\s@]+@[^\\\\s@]+\\\\.[^\\\\s@]+$/.test(value)){status.textContent='Некорректный email';return;}status.textContent='Спасибо, подписка оформлена';email.value='';});export {};\"}, {\"path\": \"styles.css\", \"content\": \"*{box-sizing:border-box}body{margin:0;font:16px Arial;padding:24px}main{max-width:600px;margin:auto}label,input,button{display:block;margin:12px 0}input{width:100%;padding:12px}button{padding:12px;background:#163b69;color:white}\"}]}",
+      "{\"files\": [{\"path\": \"index.html\", \"content\": \"<!doctype html><html lang=\\\"ru\\\"><meta charset=\\\"utf-8\\\"><meta name=\\\"viewport\\\" content=\\\"width=device-width,initial-scale=1\\\"><link rel=\\\"stylesheet\\\" href=\\\"styles.css\\\"><main><h1>Новости проекта</h1><form novalidate><label for=\\\"email\\\">Email</label><input id=\\\"email\\\" type=\\\"email\\\"><button type=\\\"submit\\\">Подписаться</button><p role=\\\"status\\\" aria-live=\\\"polite\\\"></p></form></main><script type=\\\"module\\\" src=\\\"app.js\\\"></script></html>\"}, {\"path\": \"app.ts\", \"content\": \"const input=document.getElementById('email') as HTMLInputElement;const box=document.querySelector('[role=status]')!;function valid(value:string){const parts=value.split('@');return parts.length===2&&parts[0]!.length>0&&!/\\\\s/.test(value)&&parts[1]!.split('.').length>1&&parts[1]!.split('.').every(x=>x.length>0);}document.querySelector('form')!.onsubmit=e=>{e.preventDefault();const value=input.value.trim();const ok=valid(value);box.textContent=!value?'Введите email':ok?'Спасибо за подписку':'Некорректный email';if(ok)input.value='';};export {};\"}, {\"path\": \"styles.css\", \"content\": \"*{box-sizing:border-box}body{margin:0;font:16px Arial;padding:24px}main{max-width:600px;margin:auto}label,input,button{display:block;margin:12px 0}input{width:100%;padding:12px}button{padding:12px;background:#163b69;color:white}button:focus{outline:3px solid orange}\"}]}"
+    ],
+    "incorrectExamples": [
+      {
+        "output": "{\"files\": [{\"path\": \"index.html\", \"content\": \"<!doctype html><html lang=\\\"ru\\\"><meta charset=\\\"utf-8\\\"><meta name=\\\"viewport\\\" content=\\\"width=device-width,initial-scale=1\\\"><link rel=\\\"stylesheet\\\" href=\\\"styles.css\\\"><main><h1>Новости проекта</h1><form novalidate><label for=\\\"email\\\">Email</label><input id=\\\"email\\\" type=\\\"email\\\"><button type=\\\"submit\\\">Подписаться</button><p role=\\\"status\\\" aria-live=\\\"polite\\\"></p></form></main><script type=\\\"module\\\" src=\\\"app.js\\\"></script></html>\"}, {\"path\": \"app.ts\", \"content\": \"document.querySelector('form')!.addEventListener('submit',e=>e.preventDefault());export {};\"}, {\"path\": \"styles.css\", \"content\": \"*{box-sizing:border-box}body{margin:0;font:16px Arial;padding:24px}main{max-width:600px;margin:auto}label,input,button{display:block;margin:12px 0}input{width:100%;padding:12px}button{padding:12px;background:#163b69;color:white}\"}]}",
+        "reason": "Нет переходов состояний и успешной подписки"
+      }
+    ]
+  },
+  "v1-backend": {
+    "taskVersion": "1.0.0",
+    "correctAlternatives": [
+      "{\"files\": [{\"path\": \"server.ts\", \"content\": \"import {createServer} from 'node:http';const items=[{id:1,name:'A'},{id:2,name:'B'},{id:3,name:'C'},{id:4,name:'D'},{id:5,name:'E'}];createServer((req,res)=>{res.setHeader('Content-Type','application/json');const send=(n:number,b:unknown)=>{res.statusCode=n;res.end(JSON.stringify(b));};const u=new URL(req.url??'/', 'http://localhost');if(u.pathname==='/health')return send(200,{status:'ok'});if(u.pathname!=='/items')return send(404,{error:'not found'});if(req.method!=='GET')return send(405,{error:'method'});const p=u.searchParams.get('page')??'1',l=u.searchParams.get('limit')??'2';if(!/^\\\\d+$/.test(p)||!/^\\\\d+$/.test(l)||Number(p)<1||Number(l)<1||Number(l)>100)return send(400,{error:'invalid pagination'});const page=Number(p),limit=Number(l);send(200,{items:items.slice((page-1)*limit,page*limit),total:items.length,page,limit});}).listen(Number(process.env.PORT??3000),'127.0.0.1');\"}]}",
+      "{\"files\": [{\"path\": \"server.ts\", \"content\": \"import {createServer} from 'node:http';const items=Array.from('ABCDE',(name,index)=>({id:index+1,name}));createServer((req,res)=>{res.setHeader('Content-Type','application/json');const send=(n:number,b:unknown)=>{res.statusCode=n;res.end(JSON.stringify(b));};const u=new URL(req.url??'/', 'http://localhost');if(u.pathname==='/health')return send(200,{status:'ok'});if(u.pathname!=='/items')return send(404,{error:'not found'});if(req.method!=='GET')return send(405,{error:'method'});const p=u.searchParams.get('page')??'1',l=u.searchParams.get('limit')??'2';if(!/^\\\\d+$/.test(p)||!/^\\\\d+$/.test(l)||Number(p)<1||Number(l)<1||Number(l)>100)return send(400,{error:'invalid pagination'});const page=Number(p),limit=Number(l);send(200,{items:items.filter((_,i)=>i>=(page-1)*limit&&i<page*limit),total:items.length,page,limit});}).listen(Number(process.env.PORT??3000),'127.0.0.1');\"}]}"
+    ],
+    "incorrectExamples": [
+      {
+        "output": "{\"files\": [{\"path\": \"server.ts\", \"content\": \"import {createServer} from 'node:http';const items=[{id:1,name:'A'},{id:2,name:'B'},{id:3,name:'C'},{id:4,name:'D'},{id:5,name:'E'}];createServer((req,res)=>{res.setHeader('Content-Type','application/json');const send=(n:number,b:unknown)=>{res.statusCode=n;res.end(JSON.stringify(b));};const u=new URL(req.url??'/', 'http://localhost');if(u.pathname==='/health')return send(200,{status:'ok'});if(u.pathname!=='/items')return send(404,{error:'not found'});if(req.method!=='GET')return send(405,{error:'method'});const p=u.searchParams.get('page')??'1',l=u.searchParams.get('limit')??'2';if(!/^\\\\d+$/.test(p)||!/^\\\\d+$/.test(l)||Number(p)<1||Number(l)<1||Number(l)>1000)return send(400,{error:'invalid pagination'});const page=Number(p),limit=Number(l);send(200,{items:items.slice((page-1)*limit,page*limit),total:items.length,page,limit});}).listen(Number(process.env.PORT??3000),'127.0.0.1');\"}]}",
+        "reason": "Пропускает запрещённый limit=101"
+      }
+    ]
+  },
+  "v1-ui-design": {
+    "taskVersion": "1.0.0",
+    "correctAlternatives": [
+      "{\"files\": [{\"path\": \"index.html\", \"content\": \"<!doctype html><html lang=\\\"ru\\\"><meta charset=\\\"utf-8\\\"><meta name=\\\"viewport\\\" content=\\\"width=device-width,initial-scale=1\\\"><link rel=\\\"stylesheet\\\" href=\\\"styles.css\\\"><main><h1>Тарифы</h1><section><article><h2>Старт</h2><p>0 ₽ / месяц</p><p>Один проект</p><button>Начать</button></article><article class=\\\"recommended\\\"><h2>Команда</h2><p>990 ₽ / месяц</p><p>Рекомендуем · пять проектов</p><button>Выбрать Команда</button></article><article><h2>Бизнес</h2><p>2990 ₽ / месяц</p><p>Двадцать проектов</p><button>Выбрать Бизнес</button></article></section></main></html>\"}, {\"path\": \"styles.css\", \"content\": \"*{box-sizing:border-box}body{font:16px/1.5 Arial;margin:0;background:#eef2f6;padding:24px;color:#182b40}main{max-width:1100px;margin:auto}section{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}article{padding:24px;background:white;border:2px solid #c9d6e2;border-radius:14px}.recommended{border-color:#265ed1}button{padding:12px;background:#214da0;color:white;border:0;border-radius:6px;font:inherit}@media(max-width:700px){section{grid-template-columns:1fr}}\"}]}",
+      "{\"files\": [{\"path\": \"index.html\", \"content\": \"<!doctype html><html lang=\\\"ru\\\"><meta charset=\\\"utf-8\\\"><meta name=\\\"viewport\\\" content=\\\"width=device-width,initial-scale=1\\\"><link rel=\\\"stylesheet\\\" href=\\\"styles.css\\\"><main><h1>Тарифы</h1><section><article><h2>Старт</h2><p>0 ₽ / месяц</p><p>Один проект</p><button>Начать</button></article><article class=\\\"recommended\\\"><h2>Команда</h2><p>990 ₽ / месяц</p><p>Рекомендуем · пять проектов</p><button>Выбрать Команда</button></article><article><h2>Бизнес</h2><p>2990 ₽ / месяц</p><p>Двадцать проектов</p><button>Выбрать Бизнес</button></article></section></main></html>\"}, {\"path\": \"styles.css\", \"content\": \"*{box-sizing:border-box}body{font:16px/1.5 Arial;margin:0;background:#eef2f6;padding:24px;color:#182b40}main{max-width:1100px;margin:auto}section{display:flex;flex-wrap:wrap;gap:20px}article{padding:24px;background:white;border:2px solid #c9d6e2;border-radius:14px}.recommended{border-color:#265ed1}button{padding:12px;background:#214da0;color:white;border:0;border-radius:6px;font:inherit}@media(max-width:700px){section{grid-template-columns:1fr}}article{flex:1;min-width:230px}\"}]}"
+    ],
+    "incorrectExamples": [
+      {
+        "output": "{\"files\": [{\"path\": \"index.html\", \"content\": \"<!doctype html><html lang=\\\"ru\\\"><meta charset=\\\"utf-8\\\"><meta name=\\\"viewport\\\" content=\\\"width=device-width,initial-scale=1\\\"><link rel=\\\"stylesheet\\\" href=\\\"styles.css\\\"><main><h1>Тарифы</h1><section><article><h2>Старт</h2><p>0 ₽ / месяц</p><p>Один проект</p><button>Начать</button></article><article class=\\\"recommended\\\"><h2>Команда</h2><p>990 ₽ / месяц</p><p>Рекомендуем · пять проектов</p><button>Выбрать Команда</button></article><article><h2>Бизнес</h2><p>3990 ₽ / месяц</p><p>Двадцать проектов</p><button>Выбрать Бизнес</button></article></section></main></html>\"}, {\"path\": \"styles.css\", \"content\": \"*{box-sizing:border-box}body{font:16px/1.5 Arial;margin:0;background:#eef2f6;padding:24px;color:#182b40}main{max-width:1100px;margin:auto}section{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}article{padding:24px;background:white;border:2px solid #c9d6e2;border-radius:14px}.recommended{border-color:#265ed1}button{padding:12px;background:#214da0;color:white;border:0;border-radius:6px;font:inherit}@media(max-width:700px){section{grid-template-columns:1fr}}\"}]}",
+        "reason": "Изменена цена из источника"
+      }
+    ]
+  },
+  "v1-sql": {
+    "taskVersion": "1.0.0",
+    "correctAlternatives": [
+      "{\"files\": [{\"path\": \"query.sql\", \"content\": \"SELECT c.id AS customer_id,c.name,COALESCE(SUM(o.amount),0) AS paid_total FROM customers c LEFT JOIN orders o ON o.customer_id=c.id AND o.status='paid' GROUP BY c.id,c.name ORDER BY paid_total DESC,customer_id ASC;\"}]}",
+      "{\"files\": [{\"path\": \"query.sql\", \"content\": \"SELECT c.id AS customer_id,c.name,COALESCE((SELECT SUM(amount) FROM orders o WHERE o.customer_id=c.id AND o.status='paid'),0) AS paid_total FROM customers c ORDER BY paid_total DESC,customer_id ASC;\"}]}"
+    ],
+    "incorrectExamples": [
+      {
+        "output": "{\"files\": [{\"path\": \"query.sql\", \"content\": \"SELECT c.id AS customer_id,c.name,COALESCE(SUM(o.amount),0) AS paid_total FROM customers c JOIN orders o ON o.customer_id=c.id AND o.status='paid' GROUP BY c.id,c.name ORDER BY paid_total DESC,customer_id ASC;\"}]}",
+        "reason": "Теряет клиента без заказов"
+      }
+    ]
+  },
+  "v1-algorithms": {
+    "taskVersion": "1.0.0",
+    "correctAlternatives": [
+      "{\"files\": [{\"path\": \"solution.ts\", \"content\": \"type Range={start:number,end:number};export function mergeRanges(ranges:Range[]):Range[]{const a=ranges.map(r=>({...r})).sort((a,b)=>a.start-b.start);const out:Range[]=[];for(const r of a){const last=out.at(-1);if(last&&r.start<=last.end)last.end=Math.max(last.end,r.end);else out.push(r);}return out;}\"}]}",
+      "{\"files\": [{\"path\": \"solution.ts\", \"content\": \"type R={start:number,end:number};export function mergeRanges(input:R[]):R[]{return [...input].sort((a,b)=>a.start-b.start).reduce<R[]>((acc,r)=>{const i=acc.length-1;if(i>=0&&acc[i]!.end>=r.start)acc[i]={start:acc[i]!.start,end:Math.max(acc[i]!.end,r.end)};else acc.push({...r});return acc;},[]);}\"}]}"
+    ],
+    "incorrectExamples": [
+      {
+        "output": "{\"files\": [{\"path\": \"solution.ts\", \"content\": \"type Range={start:number,end:number};export function mergeRanges(ranges:Range[]):Range[]{const a=ranges.map(r=>({...r})).sort((a,b)=>a.start-b.start);const out:Range[]=[];for(const r of a){const last=out.at(-1);if(last&&r.start<=last.end)last.end=r.end;else out.push(r);}return out;}\"}]}",
+        "reason": "Вложенный интервал сужает результат"
+      }
+    ]
+  },
+  "v1-debugging": {
+    "taskVersion": "1.0.0",
+    "correctAlternatives": [
+      "{\"files\": [{\"path\": \"solution.ts\", \"content\": \"export function summarize(items:Array<{group:string,cents:number}>):Record<string,number>{const out:Record<string,number>=Object.create(null);for(const x of items)out[x.group]=(out[x.group]??0)+x.cents;return out;}\"}]}",
+      "{\"files\": [{\"path\": \"solution.ts\", \"content\": \"export function summarize(items:Array<{group:string,cents:number}>):Record<string,number>{const m=new Map<string,number>();for(const x of items)m.set(x.group,(m.get(x.group)??0)+x.cents);return Object.fromEntries(m);}\"}]}"
+    ],
+    "incorrectExamples": [
+      {
+        "output": "{\"files\": [{\"path\": \"solution.ts\", \"content\": \"export function summarize(items:Array<{group:string,cents:number}>):Record<string,number>{const out:Record<string,number>={};for(const x of items)out[x.group]=(out[x.group]??0)+x.cents;return out;}\"}]}",
+        "reason": "Наследуемые имена ломают аккумулятор"
+      }
+    ]
+  },
+  "v1-refactoring": {
+    "taskVersion": "1.0.0",
+    "correctAlternatives": [
+      "{\"files\": [{\"path\": \"solution.ts\", \"content\": \"type Invoice={items:Array<{cents:number,count:number}>,discount:number,tax:number};export function invoiceTotal(i:Invoice):number{const subtotal=i.items.reduce((s,x)=>s+x.cents*x.count,0);return Math.round(subtotal*(1-i.discount/100)*(1+i.tax/100));}\"}]}",
+      "{\"files\": [{\"path\": \"solution.ts\", \"content\": \"export function invoiceTotal({items,discount,tax}:{items:{cents:number,count:number}[],discount:number,tax:number}):number{let subtotal=0;for(const item of items)subtotal+=item.cents*item.count;const net=subtotal-subtotal*discount/100;return Math.round(net+net*tax/100);}\"}]}"
+    ],
+    "incorrectExamples": [
+      {
+        "output": "{\"files\": [{\"path\": \"solution.ts\", \"content\": \"type Invoice={items:Array<{cents:number,count:number}>,discount:number,tax:number};export function invoiceTotal(i:Invoice):number{const subtotal=i.items.reduce((s,x)=>s+x.cents*x.count,0);return Math.floor(subtotal*(1-i.discount/100)*(1+i.tax/100));}\"}]}",
+        "reason": "Изменяет округление .5"
+      }
+    ]
+  },
+  "v1-test-writing": {
+    "taskVersion": "1.0.0",
+    "correctAlternatives": [
+      "{\"files\": [{\"path\": \"solution.ts\", \"content\": \"export function verify(shipping:(weight:number)=>number):void{for(const [w,want] of [[0,0],[0.5,5],[1,5],[1.1,10],[5,10],[5.1,20]])if(shipping(w!)!==want)throw Error('case');let threw=false;try{shipping(-1);}catch{threw=true;}if(!threw)throw Error('negative');}\"}]}",
+      "{\"files\": [{\"path\": \"solution.ts\", \"content\": \"import assert from 'node:assert/strict';export function verify(fn:(w:number)=>number):void{assert.equal(fn(0),0);assert.equal(fn(1),5);assert.equal(fn(5),10);assert.equal(fn(10),20);assert.throws(()=>fn(-0.1));assert.throws(()=>fn(NaN));}\"}]}"
+    ],
+    "incorrectExamples": [
+      {
+        "output": "{\"files\": [{\"path\": \"solution.ts\", \"content\": \"export function verify(_fn:(w:number)=>number):void{}\"}]}",
+        "reason": "Не обнаруживает ни одной мутации"
+      }
+    ]
+  },
+  "v1-architecture": {
+    "taskVersion": "1.0.0",
+    "correctAlternatives": [
+      "{\"storage\": \"PostgreSQL\", \"queue\": \"transactional outbox\", \"idempotency\": \"Уникальный eventId, дедупликация до доставки\", \"retries\": \"3 попытки с backoff, затем dead letter\", \"backup\": \"Ежедневный backup и проверка restore\", \"rationale\": \"Outbox атомарен с основной записью, обслуживается двумя инженерами без Kafka\"}",
+      "{\"storage\": \"MySQL\", \"queue\": \"outbox table\", \"idempotency\": \"Уникальный eventId, дедупликация до доставки\", \"retries\": \"3 попытки с backoff, затем dead letter\", \"backup\": \"Ежедневный backup и проверка restore\", \"rationale\": \"Одна SQL база и отдельный worker; очередь в таблице экономит поддержку\"}"
+    ],
+    "incorrectExamples": [
+      {
+        "output": "{\"storage\": \"Kafka\", \"queue\": \"transactional outbox\", \"idempotency\": \"\", \"retries\": \"3 попытки с backoff, затем dead letter\", \"backup\": \"Ежедневный backup и проверка restore\", \"rationale\": \"Outbox атомарен с основной записью, обслуживается двумя инженерами без Kafka\"}",
+        "reason": "Нарушает ограничения и теряет идемпотентность"
+      }
+    ]
+  },
+  "v1-devops": {
+    "taskVersion": "1.0.0",
+    "correctAlternatives": [
+      "{\"files\": [{\"path\": \"server.ts\", \"content\": \"import {createServer} from 'node:http';const items=[{id:1,name:'A'},{id:2,name:'B'},{id:3,name:'C'},{id:4,name:'D'},{id:5,name:'E'}];createServer((req,res)=>{res.setHeader('Content-Type','application/json');const send=(n:number,b:unknown)=>{res.statusCode=n;res.end(JSON.stringify(b));};const u=new URL(req.url??'/', 'http://localhost');if(u.pathname==='/health')return send(200,{status:'ok'});if(u.pathname!=='/items')return send(404,{error:'not found'});if(req.method!=='GET')return send(405,{error:'method'});const p=u.searchParams.get('page')??'1',l=u.searchParams.get('limit')??'2';if(!/^\\\\d+$/.test(p)||!/^\\\\d+$/.test(l)||Number(p)<1||Number(l)<1||Number(l)>100)return send(400,{error:'invalid pagination'});const page=Number(p),limit=Number(l);send(200,{items:items.slice((page-1)*limit,page*limit),total:items.length,page,limit});}).listen(Number(process.env.PORT??3000),'127.0.0.1');\"}, {\"path\": \"start.sh\", \"content\": \"#!/bin/sh\\nset -eu\\nexec node server.ts\\n\"}, {\"path\": \"Dockerfile\", \"content\": \"FROM node:24.16.0-bookworm-slim\\nWORKDIR /app\\nCOPY server.ts start.sh ./\\nUSER node\\nENTRYPOINT [\\\"/bin/sh\\\", \\\"./start.sh\\\"]\\n\"}]}",
+      "{\"files\": [{\"path\": \"server.ts\", \"content\": \"import {createServer} from 'node:http';const items=Array.from('ABCDE',(name,index)=>({id:index+1,name}));createServer((req,res)=>{res.setHeader('Content-Type','application/json');const send=(n:number,b:unknown)=>{res.statusCode=n;res.end(JSON.stringify(b));};const u=new URL(req.url??'/', 'http://localhost');if(u.pathname==='/health')return send(200,{status:'ok'});if(u.pathname!=='/items')return send(404,{error:'not found'});if(req.method!=='GET')return send(405,{error:'method'});const p=u.searchParams.get('page')??'1',l=u.searchParams.get('limit')??'2';if(!/^\\\\d+$/.test(p)||!/^\\\\d+$/.test(l)||Number(p)<1||Number(l)<1||Number(l)>100)return send(400,{error:'invalid pagination'});const page=Number(p),limit=Number(l);send(200,{items:items.filter((_,i)=>i>=(page-1)*limit&&i<page*limit),total:items.length,page,limit});}).listen(Number(process.env.PORT??3000),'127.0.0.1');\"}, {\"path\": \"start.sh\", \"content\": \"#!/bin/sh\\nset -eu\\n: \\\"${PORT:=3000}\\\"\\nexport PORT\\nexec node ./server.ts\\n\"}, {\"path\": \"Dockerfile\", \"content\": \"FROM node:24.16.0-bookworm-slim\\nWORKDIR /app\\nCOPY server.ts start.sh ./\\nUSER node\\nENTRYPOINT [\\\"/bin/sh\\\", \\\"./start.sh\\\"]\\n\"}]}"
+    ],
+    "incorrectExamples": [
+      {
+        "output": "{\"files\": [{\"path\": \"server.ts\", \"content\": \"import {createServer} from 'node:http';const items=[{id:1,name:'A'},{id:2,name:'B'},{id:3,name:'C'},{id:4,name:'D'},{id:5,name:'E'}];createServer((req,res)=>{res.setHeader('Content-Type','application/json');const send=(n:number,b:unknown)=>{res.statusCode=n;res.end(JSON.stringify(b));};const u=new URL(req.url??'/', 'http://localhost');if(u.pathname==='/health')return send(200,{status:'ok'});if(u.pathname!=='/items')return send(404,{error:'not found'});if(req.method!=='GET')return send(405,{error:'method'});const p=u.searchParams.get('page')??'1',l=u.searchParams.get('limit')??'2';if(!/^\\\\d+$/.test(p)||!/^\\\\d+$/.test(l)||Number(p)<1||Number(l)<1||Number(l)>100)return send(400,{error:'invalid pagination'});const page=Number(p),limit=Number(l);send(200,{items:items.slice((page-1)*limit,page*limit),total:items.length,page,limit});}).listen(Number(process.env.PORT??3000),'127.0.0.1');\"}, {\"path\": \"start.sh\", \"content\": \"#!/bin/sh\\nset -eu\\nexec node server.ts\\n\"}, {\"path\": \"Dockerfile\", \"content\": \"FROM node:24.16.0-bookworm-slim\\nWORKDIR /app\\nCOPY server.ts start.sh ./\\nUSER root\\nENTRYPOINT [\\\"/bin/sh\\\", \\\"./start.sh\\\"]\\n\"}]}",
+        "reason": "Root вместо non-root"
+      }
+    ]
+  },
+  "v1-security": {
+    "taskVersion": "1.0.0",
+    "correctAlternatives": [
+      "{\"files\": [{\"path\": \"solution.ts\", \"content\": \"import type {DatabaseSync} from 'node:sqlite';export function lookupUser(db:DatabaseSync,email:string){return db.prepare('SELECT id,email FROM users WHERE email=?').get(email)??null;}\"}]}",
+      "{\"files\": [{\"path\": \"solution.ts\", \"content\": \"import type {DatabaseSync} from 'node:sqlite';export function lookupUser(db:DatabaseSync,email:string){const rows=db.prepare('SELECT id,email FROM users WHERE email=?').all(email);return rows[0]??null;}\"}]}"
+    ],
+    "incorrectExamples": [
+      {
+        "output": "{\"files\": [{\"path\": \"solution.ts\", \"content\": \"import type {DatabaseSync} from 'node:sqlite';export function lookupUser(db:DatabaseSync,email:string){return db.prepare(`SELECT id,email FROM users WHERE email='${email}'`).get()??null;}\"}]}",
+        "reason": "Инъекция возвращает чужую запись"
+      }
+    ]
+  },
+  "v1-writing": {
+    "taskVersion": "1.0.0",
+    "correctAlternatives": [
+      "Плановые работы\n12.10.2026 с 02:00 до 02:30 UTC экспорт CSV будет недоступен из-за обновления инфраструктуры. Остальные функции продолжат работать в обычном режиме. Пожалуйста, сохраните нужные выгрузки заранее. Если появятся вопросы, напишите в поддержку: help@example.test. Спасибо за понимание.",
+      "Плановые работы\nМы обновляем инфраструктуру 12.10.2026, с 02:00 до 02:30 UTC. На это время экспорт CSV недоступен. Остальные функции остаются доступными, поэтому вы можете продолжать работу. Подготовьте выгрузки заранее. За помощью обращайтесь в поддержку по адресу help@example.test."
+    ],
+    "incorrectExamples": [
+      {
+        "output": "Плановые работы\n12.10.2026 с 02:00 до 02:30 UTC экспорт CSV будет недоступен из-за обновления инфраструктуры. Остальные функции не будут работать в обычном режиме. Пожалуйста, сохраните нужные выгрузки заранее. Если появятся вопросы, напишите в поддержку: help@example.test. Спасибо за понимание.",
+        "reason": "Противоречит доступности остальных функций"
+      }
+    ]
+  },
+  "v1-editing": {
+    "taskVersion": "1.0.0",
+    "correctAlternatives": [
+      "Версия 1.4.0\n- Добавлен экспорт CSV.\n- Исправлен сброс фильтра после обновления страницы.\n- Бесплатный тариф теперь позволяет экспортировать до 500 строк.",
+      "Версия 1.4.0\n* Добавлена выгрузка в CSV.\n* Исправлена ошибка: фильтр сбрасывался при обновлении страницы.\n* Лимит экспорта бесплатного тарифа — 500 строк."
+    ],
+    "incorrectExamples": [
+      {
+        "output": "Версия 1.4.0\n- Добавлен экспорт CSV.\n- Исправлен сброс фильтра после обновления страницы.\n- Бесплатный тариф теперь позволяет экспортировать до 5000 строк.",
+        "reason": "Изменяет лимит экспорта"
+      }
+    ]
+  },
+  "v1-translation": {
+    "taskVersion": "1.0.0",
+    "correctAlternatives": [
+      "Scheduled maintenance on 12 October 2026, from 02:00 to 02:30 UTC. CSV export will be unavailable while we update our infrastructure. All other features remain available. Contact support at help@example.test.",
+      "During scheduled maintenance on 12 October 2026 (02:00–02:30 UTC), CSV export is unavailable. We are updating our infrastructure; all other features will continue to work. For support, email help@example.test."
+    ],
+    "incorrectExamples": [
+      {
+        "output": "Scheduled maintenance on 12 October 2026, from 02:00 to 02:30 UTC. CSV export will be available while we update our infrastructure. All other features remain available. Contact support at help@example.test.",
+        "reason": "Инвертирует доступность CSV"
+      }
+    ]
+  },
+  "v1-long-context": {
+    "taskVersion": "1.0.0",
+    "correctAlternatives": [
+      "{\"ticket\": \"T-042\", \"owner\": \"Ирина\", \"due\": \"2026-10-12\", \"risk\": \"DNS\"}",
+      "{\"risk\": \"DNS\", \"due\": \"2026-10-12\", \"owner\": \"Ирина\", \"ticket\": \"T-042\"}"
+    ],
+    "incorrectExamples": [
+      {
+        "output": "{\"ticket\": \"T-042\", \"owner\": \"Ирина\", \"due\": \"2026-10-09\", \"risk\": \"DNS\"}",
+        "reason": "Берёт срок соседнего проекта"
+      }
+    ]
+  },
+  "v1-instruction-following": {
+    "taskVersion": "1.0.0",
+    "correctAlternatives": [
+      "{\"ids\": [2, 4], \"total\": 60}",
+      "{\"total\":60,\"ids\":[2,4]}"
+    ],
+    "incorrectExamples": [
+      {
+        "output": "{\"ids\": [1, 2, 4], \"total\": 160}",
+        "reason": "Не соблюдён фильтр статуса"
+      }
+    ]
+  }
+}

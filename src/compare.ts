@@ -19,16 +19,19 @@ function automaticRate(attempts: AttemptRecord[], threshold: number): number | n
   }).length / evaluated.length : null;
 }
 const diff = (baseline: number | null, current: number | null) => baseline === null || current === null ? null : current - baseline;
+function comparableTask(task: SavedRun['manifest']['suite']['tasks'][number]) { return hash(JSON.stringify({ ...task, limits: { ...task.limits, attempts: undefined } })); }
 
 export function compareRuns(baseline: SavedRun, current: SavedRun) {
   const evaluationCompatible = baseline.manifest.evaluationVersion === current.manifest.evaluationVersion;
   const shellCompatible = baseline.manifest.shellVersion === current.manifest.shellVersion
     && baseline.manifest.environment.implementationHash === current.manifest.environment.implementationHash
     && JSON.stringify(baseline.manifest.environment.dependencies) === JSON.stringify(current.manifest.environment.dependencies)
+    && baseline.manifest.environment.lockfileHash === current.manifest.environment.lockfileHash
     && baseline.manifest.environment.node === current.manifest.environment.node
     && baseline.manifest.environment.platform === current.manifest.environment.platform
     && baseline.manifest.environment.arch === current.manifest.environment.arch
     && JSON.stringify(baseline.manifest.browser) === JSON.stringify(current.manifest.browser)
+    && JSON.stringify(baseline.manifest.execution ?? null) === JSON.stringify(current.manifest.execution ?? null)
     && JSON.stringify(baseline.manifest.generation) === JSON.stringify(current.manifest.generation);
   const conditions = (run: SavedRun) => run.manifest.conditions ? {
     provider: run.manifest.conditions.provider, executionMode: run.manifest.conditions.executionMode,
@@ -44,9 +47,17 @@ export function compareRuns(baseline: SavedRun, current: SavedRun) {
       .every((c) => c.returnedModel !== null && (run.manifest.mode !== 'openrouter' || c.returnedProvider != null));
   const routesVerified = routeVerified(baseline) && routeVerified(current);
   const conditionsCompatible = JSON.stringify(conditions(baseline)) === JSON.stringify(conditions(current));
+  const modelShell = (run: SavedRun) => run.manifest.conditions ? {
+    ...conditions(run), configHash: undefined,
+    settings: run.manifest.conditions.diagnostic.config.settings ?? null,
+    endpoint: 'candidate' in run.manifest.config ? run.manifest.config.candidate.providerEndpoint : null,
+    promptTransport: 'candidate' in run.manifest.config ? run.manifest.config.candidate.promptTransport : null,
+    limits: 'limits' in run.manifest.config ? { ...run.manifest.config.limits, attempts: undefined } : null,
+  } : conditions(run);
+  const modelComparisonCompatible = shellCompatible && JSON.stringify(modelShell(baseline)) === JSON.stringify(modelShell(current));
   const regressionEligible = shellCompatible && conditionsCompatible && routesVerified && !routeChanged && baseline.manifest.mode !== 'manual';
   const matches = baseline.manifest.suite.tasks.filter((task) => task.readiness === 'enabled' && evaluationCompatible
-    && baseline.manifest.taskHashes[task.id] === current.manifest.taskHashes[task.id]
+    && current.manifest.suite.tasks.some(t => t.id === task.id && comparableTask(t) === comparableTask(task))
     && baseline.manifest.promptHashes[task.id] === current.manifest.promptHashes[task.id]
     && task.materials.every((m) => baseline.manifest.materialHashes[`${task.id}/${m.id}`] === current.manifest.materialHashes[`${task.id}/${m.id}`])
     && current.manifest.suite.tasks.some((t) => t.id === task.id && t.readiness === 'enabled'));
@@ -61,8 +72,8 @@ export function compareRuns(baseline: SavedRun, current: SavedRun) {
       const other = after.find((b) => b.index === a.index);
       return other ? [{ before: a, after: other }] : [];
     });
-    const usable = pairs.filter((p) => p.before.checks.length > 0 && p.after.checks.length > 0
-      && (baseline.manifest.schemaVersion === 1 && current.manifest.schemaVersion === 1 || shellCompatible && conditionsCompatible));
+    // Одинаковые задания допускают сравнение систем. Строгость окружения нужна для сигнала, а не для A/B.
+    const usable = pairs.filter((p) => p.before.checks.length > 0 && p.after.checks.length > 0);
     allPairedBaseline.push(...pairs.map((p) => p.before));
     allPairedCurrent.push(...pairs.map((p) => p.after));
     pairedBaseline.push(...usable.map((p) => p.before));
@@ -74,7 +85,9 @@ export function compareRuns(baseline: SavedRun, current: SavedRun) {
       pairedAttempts: usable.length, skippedPairs: pairs.length - usable.length,
       baselineAutomatedPassRate: baselineRate, currentAutomatedPassRate: currentRate,
       deltaPercentagePoints: delta === null ? null : delta * 100,
-      status: delta === null ? 'not_evaluated' : !regressionEligible ? 'not_comparable' : delta < 0 ? 'suspected' : delta > 0 ? 'improved' : 'stable' };
+      baselineAttemptScores: usable.map((p) => p.before.checks.reduce((s, c) => s + c.score * c.weight, 0) / p.before.checks.reduce((s, c) => s + c.weight, 0)),
+      currentAttemptScores: usable.map((p) => p.after.checks.reduce((s, c) => s + c.score * c.weight, 0) / p.after.checks.reduce((s, c) => s + c.weight, 0)),
+      status: delta === null ? 'not_evaluated' : !regressionEligible ? 'comparison_only' : delta < 0 ? 'suspected' : delta > 0 ? 'improved' : 'stable' };
   });
   const comparableSuite = { ...baseline.manifest.suite, tasks: matches };
   const matchingCalls = (run: SavedRun, attempts: AttemptRecord[]) => run.calls.filter((c) => attempts.some((a) => a.attemptId === c.attemptId));
@@ -86,10 +99,15 @@ export function compareRuns(baseline: SavedRun, current: SavedRun) {
   const excludedTaskIds = [...new Set([...baseline.manifest.suite.tasks, ...current.manifest.suite.tasks].map((t) => t.id))].filter((id) => !matches.some((t) => t.id === id));
   return {
     schemaVersion: 1, mode: baseline.manifest.mode === 'mock' && current.manifest.mode === 'mock' ? 'mock' : 'measurement', baselineRunId: baseline.manifest.runId, currentRunId: current.manifest.runId,
-    comparisonKind: !evaluationCompatible || !matches.length ? 'not_comparable' : shellCompatible && conditionsCompatible ? 'models' : 'systems',
+    comparisonKind: !evaluationCompatible || !matches.length ? 'not_comparable' : modelComparisonCompatible ? 'models' : 'systems',
     suiteChanged: baseline.manifest.suiteHash !== current.manifest.suiteHash,
-    evaluationCompatible, shellCompatible, conditionsCompatible, regressionEligible, routeChanged, routesVerified,
+    evaluationCompatible, shellCompatible, conditionsCompatible, modelComparisonCompatible, regressionEligible, routeChanged, routesVerified,
     routes: { baseline: route(baseline), current: route(current) }, excludedTaskIds,
+    environmentDifferences: [...new Set([...Object.keys(baseline.manifest.environment), ...Object.keys(current.manifest.environment)])]
+      .filter((key) => key !== 'commit' && JSON.stringify(baseline.manifest.environment[key as keyof typeof baseline.manifest.environment]) !== JSON.stringify(current.manifest.environment[key as keyof typeof current.manifest.environment]))
+      .map((key) => ({ field: key, baseline: baseline.manifest.environment[key as keyof typeof baseline.manifest.environment], current: current.manifest.environment[key as keyof typeof current.manifest.environment] })),
+    systemConditions: { baseline: conditions(baseline), current: conditions(current) },
+    regression: { eligible: regressionEligible, suspectedTaskIds: tasks.filter((t) => t.status === 'suspected').map((t) => t.taskId), requiresFreshRun: tasks.some((t) => t.status === 'suspected') },
     matchingTaskCount: matches.length, observedTaskCount: tasks.filter((t) => t.pairedAttempts > 0).length,
     pairedAttemptCount: pairedBaseline.length, tasks, baseline: before, current: after,
     categories: beforeQuality.categories.map((c) => {

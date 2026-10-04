@@ -1,0 +1,1008 @@
+{
+  "id": "practical-standard",
+  "version": "standard-1",
+  "evaluationVersion": "standard-checks-1",
+  "tasks": [
+    {
+      "id": "v1-frontend",
+      "version": "1.0.0",
+      "title": "Форма подписки с состояниями",
+      "primaryCategory": "frontend",
+      "evaluationCategories": [
+        "frontend"
+      ],
+      "difficulty": "medium",
+      "prompt": "Реализуй форму подписки: связанные Email и поле, кнопка «Подписаться», live role=status. Для пустого поля покажи «Введите email», неверного email — «Некорректный email», правильного — «Спасибо» и очисти поле. Повторная отправка работает. Без горизонтального скролла при 390/1440 px. Файлы index.html, app.ts, styles.css. Верни только JSON {\"files\":[{\"path\":\"...\",\"content\":\"...\"}]}. Все перечисленные файлы обязательны; без Markdown. Внешние зависимости запрещены.",
+      "materials": [
+        {
+          "id": "source",
+          "content": "Готовая оболочка: index.html подключает ./styles.css и module ./app.js. app.ts компилируется TypeScript 7.0.2 strict в ES2022 браузерный модуль. Chromium 1.63.0, локальные ресурсы; сеть заблокирована. Запросы подписки не нужны."
+        }
+      ],
+      "successCriteria": [
+        "Выполнить все условия исходных материалов.",
+        "Сохранить поведение на граничных случаях; альтернативная реализация допустима."
+      ],
+      "criticalRequirements": [
+        "Не нарушать факты, интерфейс, обязательные ограничения и формат ответа."
+      ],
+      "checks": [
+        {
+          "id": "objective",
+          "evaluator": "practical-code",
+          "category": "frontend",
+          "critical": true,
+          "weight": 1
+        }
+      ],
+      "rubric": {
+        "version": "standard-rubric-1",
+        "categories": [],
+        "criteria": []
+      },
+      "manualRequired": false,
+      "passThreshold": 1,
+      "limits": {
+        "maxInputTokens": 32768,
+        "maxOutputTokens": 4096,
+        "timeoutMs": 30000,
+        "maxCalls": 1,
+        "maxRetries": 0,
+        "maxSteps": 1,
+        "attempts": 1,
+        "maxJudgeCalls": 0
+      },
+      "reference": null,
+      "readiness": "enabled",
+      "validation": {
+        "version": "standard-validation-1",
+        "fixture": "fixtures/standard-examples.json"
+      },
+      "execution": {
+        "kind": "frontend",
+        "allowedFiles": [
+          "index.html",
+          "app.ts",
+          "styles.css"
+        ],
+        "timeoutMs": 30000
+      }
+    },
+    {
+      "id": "v1-backend",
+      "version": "1.0.0",
+      "title": "Рабочий HTTP API пагинации",
+      "primaryCategory": "backend",
+      "evaluationCategories": [
+        "backend"
+      ],
+      "difficulty": "medium",
+      "prompt": "Создай server.ts по контракту. Реально запускаемый HTTP API, без внешних зависимостей. Верни только JSON {\"files\":[{\"path\":\"...\",\"content\":\"...\"}]}. Все перечисленные файлы обязательны; без Markdown. Внешние зависимости запрещены.",
+      "materials": [
+        {
+          "id": "source",
+          "content": "Node.js 24.16.0, только node:http. PORT из env, bind 127.0.0.1. Данные items: [{id:1,name:A},{id:2,name:B},{id:3,name:C},{id:4,name:D},{id:5,name:E}]. GET /health ->200 {status:ok}. GET /items: page по умолчанию 1, limit 2, целые page>=1, limit 1..100. Ответ {items,total,page,limit}. Страница после конца: []. Ошибки JSON {error:string}: invalid query 400, неизвестный путь 404, POST /items 405. Не допускай parseInt(\"2x\") как валидное число."
+        }
+      ],
+      "successCriteria": [
+        "Выполнить все условия исходных материалов.",
+        "Сохранить поведение на граничных случаях; альтернативная реализация допустима."
+      ],
+      "criticalRequirements": [
+        "Не нарушать факты, интерфейс, обязательные ограничения и формат ответа."
+      ],
+      "checks": [
+        {
+          "id": "objective",
+          "evaluator": "practical-code",
+          "category": "backend",
+          "critical": true,
+          "weight": 1
+        }
+      ],
+      "rubric": {
+        "version": "standard-rubric-1",
+        "categories": [],
+        "criteria": []
+      },
+      "manualRequired": false,
+      "passThreshold": 1,
+      "limits": {
+        "maxInputTokens": 32768,
+        "maxOutputTokens": 4096,
+        "timeoutMs": 30000,
+        "maxCalls": 1,
+        "maxRetries": 0,
+        "maxSteps": 1,
+        "attempts": 1,
+        "maxJudgeCalls": 0
+      },
+      "reference": null,
+      "readiness": "enabled",
+      "validation": {
+        "version": "standard-validation-1",
+        "fixture": "fixtures/standard-examples.json"
+      },
+      "execution": {
+        "kind": "backend",
+        "allowedFiles": [
+          "server.ts"
+        ],
+        "timeoutMs": 30000
+      }
+    },
+    {
+      "id": "v1-ui-design",
+      "version": "1.0.0",
+      "title": "Страница тарифов по фиксированному брифу",
+      "primaryCategory": "ui-design",
+      "evaluationCategories": [
+        "ui-design"
+      ],
+      "difficulty": "medium",
+      "prompt": "Собери index.html и styles.css: три карточки тарифов, читаемая типографика, рекомендуемая Команда, кнопки. ПК и телефон, локальные ресурсы без JS. Верни только JSON {\"files\":[{\"path\":\"...\",\"content\":\"...\"}]}. Все перечисленные файлы обязательны; без Markdown. Внешние зависимости запрещены.",
+      "materials": [
+        {
+          "id": "source",
+          "content": "Тарифы: Старт 0 ₽ / месяц, один проект; Команда 990 ₽ / месяц, пять проектов, рекомендуемая; Бизнес 2990 ₽ / месяц, двадцать проектов. Шрифт Arial/системный, реальные PNG 1440×900 и 390×844. Содержимое нельзя менять. Красота оценивается слепым судьёй отдельно."
+        }
+      ],
+      "successCriteria": [
+        "Выполнить все условия исходных материалов.",
+        "Сохранить поведение на граничных случаях; альтернативная реализация допустима."
+      ],
+      "criticalRequirements": [
+        "Не нарушать факты, интерфейс, обязательные ограничения и формат ответа."
+      ],
+      "checks": [
+        {
+          "id": "objective",
+          "evaluator": "practical-code",
+          "category": "ui-design",
+          "critical": true,
+          "weight": 1
+        }
+      ],
+      "rubric": {
+        "version": "standard-rubric-1",
+        "categories": [
+          "ui-design"
+        ],
+        "criteria": [
+          "Иерархия тарифов и выделение рекомендуемого",
+          "Читаемость, интервалы и контраст на ПК/телефоне",
+          "Соответствие фиксированному брифу"
+        ]
+      },
+      "manualRequired": true,
+      "passThreshold": 1,
+      "limits": {
+        "maxInputTokens": 32768,
+        "maxOutputTokens": 4096,
+        "timeoutMs": 30000,
+        "maxCalls": 1,
+        "maxRetries": 0,
+        "maxSteps": 1,
+        "attempts": 1,
+        "maxJudgeCalls": 2
+      },
+      "reference": null,
+      "readiness": "enabled",
+      "validation": {
+        "version": "standard-validation-1",
+        "fixture": "fixtures/standard-examples.json"
+      },
+      "execution": {
+        "kind": "ui-design",
+        "allowedFiles": [
+          "index.html",
+          "styles.css"
+        ],
+        "timeoutMs": 30000
+      }
+    },
+    {
+      "id": "v1-sql",
+      "version": "1.0.0",
+      "title": "SQL: клиенты без оплаченных заказов",
+      "primaryCategory": "sql",
+      "evaluationCategories": [
+        "sql"
+      ],
+      "difficulty": "medium",
+      "prompt": "Верни query.sql с одним SELECT для SQLite. Для всех клиентов paid_total по paid-заказам, включая отсутствующие (0). Поля customer_id,name,paid_total, сортировка total DESC, id ASC. Верни только JSON {\"files\":[{\"path\":\"...\",\"content\":\"...\"}]}. Все перечисленные файлы обязательны; без Markdown. Внешние зависимости запрещены.",
+      "materials": [
+        {
+          "id": "source",
+          "content": "CREATE TABLE customers(id INTEGER PRIMARY KEY,name TEXT); CREATE TABLE orders(id INTEGER PRIMARY KEY,customer_id INTEGER,amount INTEGER,status TEXT). Клиенты: 1 Анна, 2 Борис, 3 Вера. Заказы (id,customer_id,amount,status): (1,1,100,paid),(2,1,50,pending),(3,2,0,paid),(4,1,200,paid)."
+        }
+      ],
+      "successCriteria": [
+        "Выполнить все условия исходных материалов.",
+        "Сохранить поведение на граничных случаях; альтернативная реализация допустима."
+      ],
+      "criticalRequirements": [
+        "Не нарушать факты, интерфейс, обязательные ограничения и формат ответа."
+      ],
+      "checks": [
+        {
+          "id": "objective",
+          "evaluator": "practical-code",
+          "category": "sql",
+          "critical": true,
+          "weight": 1
+        }
+      ],
+      "rubric": {
+        "version": "standard-rubric-1",
+        "categories": [],
+        "criteria": []
+      },
+      "manualRequired": false,
+      "passThreshold": 1,
+      "limits": {
+        "maxInputTokens": 32768,
+        "maxOutputTokens": 4096,
+        "timeoutMs": 30000,
+        "maxCalls": 1,
+        "maxRetries": 0,
+        "maxSteps": 1,
+        "attempts": 1,
+        "maxJudgeCalls": 0
+      },
+      "reference": null,
+      "readiness": "enabled",
+      "validation": {
+        "version": "standard-validation-1",
+        "fixture": "fixtures/standard-examples.json"
+      },
+      "execution": {
+        "kind": "sql",
+        "allowedFiles": [
+          "query.sql"
+        ],
+        "timeoutMs": 30000
+      }
+    },
+    {
+      "id": "v1-algorithms",
+      "version": "1.0.0",
+      "title": "Объединение интервалов",
+      "primaryCategory": "algorithms",
+      "evaluationCategories": [
+        "algorithms"
+      ],
+      "difficulty": "medium",
+      "prompt": "Экспортируй mergeRanges из solution.ts: объединить пересекающиеся/касающиеся интервалы, отсортировать. Не изменяй исходный массив. Верни только JSON {\"files\":[{\"path\":\"...\",\"content\":\"...\"}]}. Все перечисленные файлы обязательны; без Markdown. Внешние зависимости запрещены.",
+      "materials": [
+        {
+          "id": "source",
+          "content": "Вход Array<{start:number,end:number}>, start<=end, границы целые включая отрицательные, пустой массив допустим. Выход тот же тип. Пример: [3,4],[1,3] ->[1,4]. Вложенные интервалы не уменьшают end."
+        }
+      ],
+      "successCriteria": [
+        "Выполнить все условия исходных материалов.",
+        "Сохранить поведение на граничных случаях; альтернативная реализация допустима."
+      ],
+      "criticalRequirements": [
+        "Не нарушать факты, интерфейс, обязательные ограничения и формат ответа."
+      ],
+      "checks": [
+        {
+          "id": "objective",
+          "evaluator": "practical-code",
+          "category": "algorithms",
+          "critical": true,
+          "weight": 1
+        }
+      ],
+      "rubric": {
+        "version": "standard-rubric-1",
+        "categories": [],
+        "criteria": []
+      },
+      "manualRequired": false,
+      "passThreshold": 1,
+      "limits": {
+        "maxInputTokens": 32768,
+        "maxOutputTokens": 4096,
+        "timeoutMs": 30000,
+        "maxCalls": 1,
+        "maxRetries": 0,
+        "maxSteps": 1,
+        "attempts": 1,
+        "maxJudgeCalls": 0
+      },
+      "reference": null,
+      "readiness": "enabled",
+      "validation": {
+        "version": "standard-validation-1",
+        "fixture": "fixtures/standard-examples.json"
+      },
+      "execution": {
+        "kind": "algorithms",
+        "allowedFiles": [
+          "solution.ts"
+        ],
+        "timeoutMs": 30000
+      }
+    },
+    {
+      "id": "v1-debugging",
+      "version": "1.0.0",
+      "title": "Исправление аккумулятора групп",
+      "primaryCategory": "debugging",
+      "evaluationCategories": [
+        "debugging"
+      ],
+      "difficulty": "medium",
+      "prompt": "Исправь summarize в solution.ts; сохрани API и корректный результат на произвольных именах групп. Верни только JSON {\"files\":[{\"path\":\"...\",\"content\":\"...\"}]}. Все перечисленные файлы обязательны; без Markdown. Внешние зависимости запрещены.",
+      "materials": [
+        {
+          "id": "source",
+          "content": "Дефект: const out={}; for(item of items) out[item.group]=(out[item.group]||0)+item.cents. Публичный API: summarize(Array<{group:string,cents:number}>):Record<string,number>. Пусто ->{}, дубликаты суммируются, нулевые/отрицательные cents допустимы, __proto__/constructor — обычные имена."
+        }
+      ],
+      "successCriteria": [
+        "Выполнить все условия исходных материалов.",
+        "Сохранить поведение на граничных случаях; альтернативная реализация допустима."
+      ],
+      "criticalRequirements": [
+        "Не нарушать факты, интерфейс, обязательные ограничения и формат ответа."
+      ],
+      "checks": [
+        {
+          "id": "objective",
+          "evaluator": "practical-code",
+          "category": "debugging",
+          "critical": true,
+          "weight": 1
+        }
+      ],
+      "rubric": {
+        "version": "standard-rubric-1",
+        "categories": [],
+        "criteria": []
+      },
+      "manualRequired": false,
+      "passThreshold": 1,
+      "limits": {
+        "maxInputTokens": 32768,
+        "maxOutputTokens": 4096,
+        "timeoutMs": 30000,
+        "maxCalls": 1,
+        "maxRetries": 0,
+        "maxSteps": 1,
+        "attempts": 1,
+        "maxJudgeCalls": 0
+      },
+      "reference": null,
+      "readiness": "enabled",
+      "validation": {
+        "version": "standard-validation-1",
+        "fixture": "fixtures/standard-examples.json"
+      },
+      "execution": {
+        "kind": "debugging",
+        "allowedFiles": [
+          "solution.ts"
+        ],
+        "timeoutMs": 30000
+      }
+    },
+    {
+      "id": "v1-refactoring",
+      "version": "1.0.0",
+      "title": "Рефакторинг расчёта счёта",
+      "primaryCategory": "refactoring",
+      "evaluationCategories": [
+        "refactoring"
+      ],
+      "difficulty": "medium",
+      "prompt": "Упрости invoiceTotal в solution.ts, сохрани поведение legacy. Верни только JSON {\"files\":[{\"path\":\"...\",\"content\":\"...\"}]}. Все перечисленные файлы обязательны; без Markdown. Внешние зависимости запрещены.",
+      "materials": [
+        {
+          "id": "source",
+          "content": "Legacy: total=0; items.forEach(x=>total+=x.cents*x.count); total=total*(100-discount)/100; total=total*(100+tax)/100; return Math.round(total). API invoiceTotal({items:Array<{cents:number,count:number}>,discount:number,tax:number}):number. Цена в целых центах, неотрицательные count. Округление только один раз после скидки и налога; пустые items/100% скидка допустимы."
+        }
+      ],
+      "successCriteria": [
+        "Выполнить все условия исходных материалов.",
+        "Сохранить поведение на граничных случаях; альтернативная реализация допустима."
+      ],
+      "criticalRequirements": [
+        "Не нарушать факты, интерфейс, обязательные ограничения и формат ответа."
+      ],
+      "checks": [
+        {
+          "id": "objective",
+          "evaluator": "practical-code",
+          "category": "refactoring",
+          "critical": true,
+          "weight": 1
+        }
+      ],
+      "rubric": {
+        "version": "standard-rubric-1",
+        "categories": [],
+        "criteria": []
+      },
+      "manualRequired": false,
+      "passThreshold": 1,
+      "limits": {
+        "maxInputTokens": 32768,
+        "maxOutputTokens": 4096,
+        "timeoutMs": 30000,
+        "maxCalls": 1,
+        "maxRetries": 0,
+        "maxSteps": 1,
+        "attempts": 1,
+        "maxJudgeCalls": 0
+      },
+      "reference": null,
+      "readiness": "enabled",
+      "validation": {
+        "version": "standard-validation-1",
+        "fixture": "fixtures/standard-examples.json"
+      },
+      "execution": {
+        "kind": "refactoring",
+        "allowedFiles": [
+          "solution.ts"
+        ],
+        "timeoutMs": 30000
+      }
+    },
+    {
+      "id": "v1-test-writing",
+      "version": "1.0.0",
+      "title": "Тесты, обнаруживающие дефекты shipping",
+      "primaryCategory": "test-writing",
+      "evaluationCategories": [
+        "test-writing"
+      ],
+      "difficulty": "medium",
+      "prompt": "Напиши solution.ts с export verify(shipping):void. Успех — отсутствие throw на исправной функции; дефект должен приводить к throw/assert failure. Верни только JSON {\"files\":[{\"path\":\"...\",\"content\":\"...\"}]}. Все перечисленные файлы обязательны; без Markdown. Внешние зависимости запрещены.",
+      "materials": [
+        {
+          "id": "source",
+          "content": "Контракт shipping(weight:number):number. 0 ->0; 0<weight<=1 ->5; 1<weight<=5 ->10; >5 ->20. Отрицательные и не finite значения бросают Error. Функция передаётся аргументом, зависимости только node:assert. Проверяются границы/ноль/валидация, не количество assert. Не импортируй реализацию shipping."
+        }
+      ],
+      "successCriteria": [
+        "Выполнить все условия исходных материалов.",
+        "Сохранить поведение на граничных случаях; альтернативная реализация допустима."
+      ],
+      "criticalRequirements": [
+        "Не нарушать факты, интерфейс, обязательные ограничения и формат ответа."
+      ],
+      "checks": [
+        {
+          "id": "objective",
+          "evaluator": "practical-code",
+          "category": "test-writing",
+          "critical": true,
+          "weight": 1
+        }
+      ],
+      "rubric": {
+        "version": "standard-rubric-1",
+        "categories": [],
+        "criteria": []
+      },
+      "manualRequired": false,
+      "passThreshold": 1,
+      "limits": {
+        "maxInputTokens": 32768,
+        "maxOutputTokens": 4096,
+        "timeoutMs": 30000,
+        "maxCalls": 1,
+        "maxRetries": 0,
+        "maxSteps": 1,
+        "attempts": 1,
+        "maxJudgeCalls": 0
+      },
+      "reference": null,
+      "readiness": "enabled",
+      "validation": {
+        "version": "standard-validation-1",
+        "fixture": "fixtures/standard-examples.json"
+      },
+      "execution": {
+        "kind": "test-writing",
+        "allowedFiles": [
+          "solution.ts"
+        ],
+        "timeoutMs": 30000
+      }
+    },
+    {
+      "id": "v1-architecture",
+      "version": "1.0.0",
+      "title": "Архитектура доставки уведомлений",
+      "primaryCategory": "architecture",
+      "evaluationCategories": [
+        "architecture"
+      ],
+      "difficulty": "easy",
+      "prompt": "Верни JSON с storage,queue,idempotency,retries,backup,rationale. Обоснуй решение под ограничения.",
+      "materials": [
+        {
+          "id": "source",
+          "content": "1 млн событий в сутки; два инженера; уже есть SQL база; требуется at-least-once, дедупликация по eventId, запись события атомарна с записью заказа. Разрешён PostgreSQL/MySQL. Запрещена новая Kafka/Redis инфраструктура. После 3 попыток — dead letter. Ежедневный backup, проверка восстановления."
+        }
+      ],
+      "successCriteria": [
+        "Выполнить все условия исходных материалов.",
+        "Сохранить поведение на граничных случаях; альтернативная реализация допустима."
+      ],
+      "criticalRequirements": [
+        "Не нарушать факты, интерфейс, обязательные ограничения и формат ответа."
+      ],
+      "checks": [
+        {
+          "id": "objective",
+          "evaluator": "practical-text",
+          "category": "architecture",
+          "critical": true,
+          "weight": 1
+        }
+      ],
+      "rubric": {
+        "version": "standard-rubric-1",
+        "categories": [
+          "architecture"
+        ],
+        "criteria": [
+          "Точность и полнота относительно источников",
+          "Ясность и соответствие аудитории",
+          "Обоснование решений и естественность языка"
+        ]
+      },
+      "manualRequired": true,
+      "passThreshold": 1,
+      "limits": {
+        "maxInputTokens": 32768,
+        "maxOutputTokens": 1024,
+        "timeoutMs": 30000,
+        "maxCalls": 1,
+        "maxRetries": 0,
+        "maxSteps": 1,
+        "attempts": 1,
+        "maxJudgeCalls": 2
+      },
+      "reference": null,
+      "readiness": "enabled",
+      "validation": {
+        "version": "standard-validation-1",
+        "fixture": "fixtures/standard-examples.json"
+      }
+    },
+    {
+      "id": "v1-devops",
+      "version": "1.0.0",
+      "title": "Контейнерный startup и health",
+      "primaryCategory": "devops",
+      "evaluationCategories": [
+        "devops"
+      ],
+      "difficulty": "medium",
+      "prompt": "Создай server.ts, start.sh и Dockerfile. Проверка запускает start.sh в контейнере под non-root, проверяет /health и фиксированный контракт Dockerfile. Верни только JSON {\"files\":[{\"path\":\"...\",\"content\":\"...\"}]}. Все перечисленные файлы обязательны; без Markdown. Внешние зависимости запрещены.",
+      "materials": [
+        {
+          "id": "source",
+          "content": "Node.js 24.16.0-bookworm-slim, без npm-пакетов/сетевой установки. Dockerfile: FROM указанная версия (digest допустим), WORKDIR /app, COPY server.ts start.sh ./, USER node/1000/10001, ENTRYPOINT [\"/bin/sh\",\"./start.sh\"]. Не использовать RUN/ADD. start.sh с exec, PORT из env. GET /health ->200 {status:ok}, bind127.0.0.1. Настоящий docker build ответа не выполняется; проверяются контракт и запуск entrypoint."
+        }
+      ],
+      "successCriteria": [
+        "Выполнить все условия исходных материалов.",
+        "Сохранить поведение на граничных случаях; альтернативная реализация допустима."
+      ],
+      "criticalRequirements": [
+        "Не нарушать факты, интерфейс, обязательные ограничения и формат ответа."
+      ],
+      "checks": [
+        {
+          "id": "objective",
+          "evaluator": "practical-code",
+          "category": "devops",
+          "critical": true,
+          "weight": 1
+        }
+      ],
+      "rubric": {
+        "version": "standard-rubric-1",
+        "categories": [],
+        "criteria": []
+      },
+      "manualRequired": false,
+      "passThreshold": 1,
+      "limits": {
+        "maxInputTokens": 32768,
+        "maxOutputTokens": 4096,
+        "timeoutMs": 30000,
+        "maxCalls": 1,
+        "maxRetries": 0,
+        "maxSteps": 1,
+        "attempts": 1,
+        "maxJudgeCalls": 0
+      },
+      "reference": null,
+      "readiness": "enabled",
+      "validation": {
+        "version": "standard-validation-1",
+        "fixture": "fixtures/standard-examples.json"
+      },
+      "execution": {
+        "kind": "devops",
+        "allowedFiles": [
+          "server.ts",
+          "start.sh",
+          "Dockerfile"
+        ],
+        "timeoutMs": 30000
+      }
+    },
+    {
+      "id": "v1-security",
+      "version": "1.0.0",
+      "title": "Устранение SQL injection",
+      "primaryCategory": "security",
+      "evaluationCategories": [
+        "security"
+      ],
+      "difficulty": "medium",
+      "prompt": "Экспортируй lookupUser(db,email) в solution.ts. Сохрани поиск и null при отсутствии; исключи injection. Верни только JSON {\"files\":[{\"path\":\"...\",\"content\":\"...\"}]}. Все перечисленные файлы обязательны; без Markdown. Внешние зависимости запрещены.",
+      "materials": [
+        {
+          "id": "source",
+          "content": "SQLite DatabaseSync, таблица users(id INTEGER PRIMARY KEY,email TEXT). Дефект: SELECT id,email FROM users WHERE email='${email}'. Нужно использовать параметры, не делать blacklist и не конкатенировать ввод. Допустимы строки с кавычками; возвращать {id,email} либо null."
+        }
+      ],
+      "successCriteria": [
+        "Выполнить все условия исходных материалов.",
+        "Сохранить поведение на граничных случаях; альтернативная реализация допустима."
+      ],
+      "criticalRequirements": [
+        "Не нарушать факты, интерфейс, обязательные ограничения и формат ответа."
+      ],
+      "checks": [
+        {
+          "id": "objective",
+          "evaluator": "practical-code",
+          "category": "security",
+          "critical": true,
+          "weight": 1
+        }
+      ],
+      "rubric": {
+        "version": "standard-rubric-1",
+        "categories": [],
+        "criteria": []
+      },
+      "manualRequired": false,
+      "passThreshold": 1,
+      "limits": {
+        "maxInputTokens": 32768,
+        "maxOutputTokens": 4096,
+        "timeoutMs": 30000,
+        "maxCalls": 1,
+        "maxRetries": 0,
+        "maxSteps": 1,
+        "attempts": 1,
+        "maxJudgeCalls": 0
+      },
+      "reference": null,
+      "readiness": "enabled",
+      "validation": {
+        "version": "standard-validation-1",
+        "fixture": "fixtures/standard-examples.json"
+      },
+      "execution": {
+        "kind": "security",
+        "allowedFiles": [
+          "solution.ts"
+        ],
+        "timeoutMs": 30000
+      }
+    },
+    {
+      "id": "v1-writing",
+      "version": "1.0.0",
+      "title": "Уведомление клиентам по источнику",
+      "primaryCategory": "writing",
+      "evaluationCategories": [
+        "writing"
+      ],
+      "difficulty": "easy",
+      "prompt": "Напиши уведомление 35–80 слов. Первая строка «Плановые работы». Все время/дата/контакты и ограничения — только из источника.",
+      "materials": [
+        {
+          "id": "source",
+          "content": "12.10.2026 02:00–02:30 UTC: обновление инфраструктуры. Только экспорт CSV недоступен. Остальные функции работают. Поддержка help@example.test. Не добавлять обещаний компенсации."
+        }
+      ],
+      "successCriteria": [
+        "Выполнить все условия исходных материалов.",
+        "Сохранить поведение на граничных случаях; альтернативная реализация допустима."
+      ],
+      "criticalRequirements": [
+        "Не нарушать факты, интерфейс, обязательные ограничения и формат ответа."
+      ],
+      "checks": [
+        {
+          "id": "objective",
+          "evaluator": "practical-text",
+          "category": "writing",
+          "critical": true,
+          "weight": 1
+        }
+      ],
+      "rubric": {
+        "version": "standard-rubric-1",
+        "categories": [
+          "writing"
+        ],
+        "criteria": [
+          "Точность и полнота относительно источников",
+          "Ясность и соответствие аудитории",
+          "Обоснование решений и естественность языка"
+        ]
+      },
+      "manualRequired": true,
+      "passThreshold": 1,
+      "limits": {
+        "maxInputTokens": 32768,
+        "maxOutputTokens": 1024,
+        "timeoutMs": 30000,
+        "maxCalls": 1,
+        "maxRetries": 0,
+        "maxSteps": 1,
+        "attempts": 1,
+        "maxJudgeCalls": 2
+      },
+      "reference": null,
+      "readiness": "enabled",
+      "validation": {
+        "version": "standard-validation-1",
+        "fixture": "fixtures/standard-examples.json"
+      }
+    },
+    {
+      "id": "v1-editing",
+      "version": "1.0.0",
+      "title": "Редактура release notes",
+      "primaryCategory": "editing",
+      "evaluationCategories": [
+        "editing"
+      ],
+      "difficulty": "easy",
+      "prompt": "Отредактируй заметку: заголовок «Версия 1.4.0» и ровно три пункта. Сохрани факты, без рекламных обещаний.",
+      "materials": [
+        {
+          "id": "source",
+          "content": "черновик: Версия 1.4.0. сделали экспорт CSV, починили сброс фильтра когда обновляешь страницу, экспорт на бесплатном тарифе до 500 строк."
+        }
+      ],
+      "successCriteria": [
+        "Выполнить все условия исходных материалов.",
+        "Сохранить поведение на граничных случаях; альтернативная реализация допустима."
+      ],
+      "criticalRequirements": [
+        "Не нарушать факты, интерфейс, обязательные ограничения и формат ответа."
+      ],
+      "checks": [
+        {
+          "id": "objective",
+          "evaluator": "practical-text",
+          "category": "editing",
+          "critical": true,
+          "weight": 1
+        }
+      ],
+      "rubric": {
+        "version": "standard-rubric-1",
+        "categories": [
+          "editing"
+        ],
+        "criteria": [
+          "Точность и полнота относительно источников",
+          "Ясность и соответствие аудитории",
+          "Обоснование решений и естественность языка"
+        ]
+      },
+      "manualRequired": true,
+      "passThreshold": 1,
+      "limits": {
+        "maxInputTokens": 32768,
+        "maxOutputTokens": 1024,
+        "timeoutMs": 30000,
+        "maxCalls": 1,
+        "maxRetries": 0,
+        "maxSteps": 1,
+        "attempts": 1,
+        "maxJudgeCalls": 2
+      },
+      "reference": null,
+      "readiness": "enabled",
+      "validation": {
+        "version": "standard-validation-1",
+        "fixture": "fixtures/standard-examples.json"
+      }
+    },
+    {
+      "id": "v1-translation",
+      "version": "1.0.0",
+      "title": "Перевод уведомления на английский",
+      "primaryCategory": "translation",
+      "evaluationCategories": [
+        "translation"
+      ],
+      "difficulty": "easy",
+      "prompt": "Переведи источник на естественный английский. Сохрани всю информацию, UTC, CSV и адрес. Без добавлений.",
+      "materials": [
+        {
+          "id": "source",
+          "content": "Плановые работы 12 октября 2026, с 02:00 до 02:30 UTC. Экспорт CSV будет недоступен во время обновления инфраструктуры. Все остальные функции продолжают работать. Поддержка: help@example.test. Глоссарий: плановые работы = scheduled maintenance; экспорт CSV = CSV export."
+        }
+      ],
+      "successCriteria": [
+        "Выполнить все условия исходных материалов.",
+        "Сохранить поведение на граничных случаях; альтернативная реализация допустима."
+      ],
+      "criticalRequirements": [
+        "Не нарушать факты, интерфейс, обязательные ограничения и формат ответа."
+      ],
+      "checks": [
+        {
+          "id": "objective",
+          "evaluator": "practical-text",
+          "category": "translation",
+          "critical": true,
+          "weight": 1
+        }
+      ],
+      "rubric": {
+        "version": "standard-rubric-1",
+        "categories": [
+          "translation"
+        ],
+        "criteria": [
+          "Точность и полнота относительно источников",
+          "Ясность и соответствие аудитории",
+          "Обоснование решений и естественность языка"
+        ]
+      },
+      "manualRequired": true,
+      "passThreshold": 1,
+      "limits": {
+        "maxInputTokens": 32768,
+        "maxOutputTokens": 1024,
+        "timeoutMs": 30000,
+        "maxCalls": 1,
+        "maxRetries": 0,
+        "maxSteps": 1,
+        "attempts": 1,
+        "maxJudgeCalls": 2
+      },
+      "reference": null,
+      "readiness": "enabled",
+      "validation": {
+        "version": "standard-validation-1",
+        "fixture": "fixtures/standard-examples.json"
+      }
+    },
+    {
+      "id": "v1-long-context",
+      "version": "1.0.0",
+      "title": "Связывание трёх фактов в контексте",
+      "primaryCategory": "long-context",
+      "evaluationCategories": [
+        "long-context"
+      ],
+      "difficulty": "easy",
+      "prompt": "Найди ближайшую поставку Orion через связанную заявку и миграцию. Верни только JSON ticket,owner,due,risk.",
+      "materials": [
+        {
+          "id": "source",
+          "content": "Заявка T-001: сервис demo-1, статус закрыт, владелец Алексей.\nЗаявка T-002: сервис demo-2, статус закрыт, владелец Алексей.\nЗаявка T-003: сервис demo-3, статус закрыт, владелец Алексей.\nЗаявка T-004: сервис demo-4, статус закрыт, владелец Алексей.\nЗаявка T-005: сервис demo-5, статус закрыт, владелец Алексей.\nЗаявка T-006: сервис demo-6, статус закрыт, владелец Алексей.\nЗаявка T-007: сервис demo-7, статус закрыт, владелец Алексей.\nЗаявка T-008: сервис demo-8, статус закрыт, владелец Алексей.\nЗаявка T-009: сервис demo-9, статус закрыт, владелец Алексей.\nЗаявка T-010: сервис demo-10, статус закрыт, владелец Алексей.\nЗаявка T-011: сервис demo-11, статус закрыт, владелец Алексей.\nЗаявка T-012: сервис demo-12, статус закрыт, владелец Алексей.\nЗаявка T-013: сервис demo-13, статус закрыт, владелец Алексей.\nЗаявка T-014: сервис demo-14, статус закрыт, владелец Алексей.\nЗаявка T-015: сервис demo-15, статус закрыт, владелец Алексей.\nЗаявка T-016: сервис demo-16, статус закрыт, владелец Алексей.\nЗаявка T-017: сервис demo-17, статус закрыт, владелец Алексей.\nЗаявка T-018: сервис demo-18, статус закрыт, владелец Алексей.\nЗаявка T-019: сервис demo-19, статус закрыт, владелец Алексей.\nЗаявка T-020: сервис demo-20, статус закрыт, владелец Алексей.\nЗаявка T-021: сервис demo-21, статус закрыт, владелец Алексей.\nЗаявка T-022: сервис demo-22, статус закрыт, владелец Алексей.\nЗаявка T-023: сервис demo-23, статус закрыт, владелец Алексей.\nЗаявка T-024: сервис demo-24, статус закрыт, владелец Алексей.\nЗаявка T-025: сервис demo-25, статус закрыт, владелец Алексей.\nЗаявка T-026: сервис demo-26, статус закрыт, владелец Алексей.\nЗаявка T-027: сервис demo-27, статус закрыт, владелец Алексей.\nЗаявка T-028: сервис demo-28, статус закрыт, владелец Алексей.\nЗаявка T-029: сервис demo-29, статус закрыт, владелец Алексей.\nЗаявка T-030: сервис demo-30, статус закрыт, владелец Алексей.\nЗаявка T-031: сервис demo-31, статус закрыт, владелец Алексей.\nЗаявка T-032: сервис demo-32, статус закрыт, владелец Алексей.\nЗаявка T-033: сервис demo-33, статус закрыт, владелец Алексей.\nЗаявка T-034: сервис demo-34, статус закрыт, владелец Алексей.\nЗаявка T-035: сервис demo-35, статус закрыт, владелец Алексей.\nЗаявка T-036: сервис demo-36, статус закрыт, владелец Алексей.\nЗаявка T-037: сервис demo-37, статус закрыт, владелец Алексей.\nЗаявка T-038: сервис demo-38, статус закрыт, владелец Алексей.\nЗаявка T-039: сервис demo-39, статус закрыт, владелец Алексей.\nЗаявка T-040: сервис demo-40, статус закрыт, владелец Алексей.\nT-042: проект Orion, владелец Ирина.\nOrion: ближайшая поставка связана с MIG-7.\nMIG-7: срок 2026-10-12, риск DNS.\nT-041: проект Vega, владелец Борис, срок 2026-10-09, риск CPU."
+        }
+      ],
+      "successCriteria": [
+        "Выполнить все условия исходных материалов.",
+        "Сохранить поведение на граничных случаях; альтернативная реализация допустима."
+      ],
+      "criticalRequirements": [
+        "Не нарушать факты, интерфейс, обязательные ограничения и формат ответа."
+      ],
+      "checks": [
+        {
+          "id": "objective",
+          "evaluator": "practical-text",
+          "category": "long-context",
+          "critical": true,
+          "weight": 1
+        }
+      ],
+      "rubric": {
+        "version": "standard-rubric-1",
+        "categories": [],
+        "criteria": []
+      },
+      "manualRequired": false,
+      "passThreshold": 1,
+      "limits": {
+        "maxInputTokens": 32768,
+        "maxOutputTokens": 1024,
+        "timeoutMs": 30000,
+        "maxCalls": 1,
+        "maxRetries": 0,
+        "maxSteps": 1,
+        "attempts": 1,
+        "maxJudgeCalls": 0
+      },
+      "reference": null,
+      "readiness": "enabled",
+      "validation": {
+        "version": "standard-validation-1",
+        "fixture": "fixtures/standard-examples.json"
+      }
+    },
+    {
+      "id": "v1-instruction-following",
+      "version": "1.0.0",
+      "title": "Строгий формат и выборка",
+      "primaryCategory": "instruction-following",
+      "evaluationCategories": [
+        "instruction-following"
+      ],
+      "difficulty": "easy",
+      "prompt": "Верни только JSON с keys ids,total. Выбери paid, суммы >=20, сортируй ids по возрастанию. total — сумма только выбранных записей. Без комментариев и дополнительных ключей.",
+      "materials": [
+        {
+          "id": "source",
+          "content": "Записи: [{id:1,status:pending,amount:100},{id:2,status:paid,amount:20},{id:3,status:paid,amount:10},{id:4,status:paid,amount:40}]."
+        }
+      ],
+      "successCriteria": [
+        "Выполнить все условия исходных материалов.",
+        "Сохранить поведение на граничных случаях; альтернативная реализация допустима."
+      ],
+      "criticalRequirements": [
+        "Не нарушать факты, интерфейс, обязательные ограничения и формат ответа."
+      ],
+      "checks": [
+        {
+          "id": "objective",
+          "evaluator": "practical-text",
+          "category": "instruction-following",
+          "critical": true,
+          "weight": 1
+        }
+      ],
+      "rubric": {
+        "version": "standard-rubric-1",
+        "categories": [],
+        "criteria": []
+      },
+      "manualRequired": false,
+      "passThreshold": 1,
+      "limits": {
+        "maxInputTokens": 32768,
+        "maxOutputTokens": 1024,
+        "timeoutMs": 30000,
+        "maxCalls": 1,
+        "maxRetries": 0,
+        "maxSteps": 1,
+        "attempts": 1,
+        "maxJudgeCalls": 0
+      },
+      "reference": null,
+      "readiness": "enabled",
+      "validation": {
+        "version": "standard-validation-1",
+        "fixture": "fixtures/standard-examples.json"
+      }
+    }
+  ]
+}

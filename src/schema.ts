@@ -7,6 +7,7 @@ export const evaluatorIds = [
   'contact-form', 'faq-disclosure', 'pagination', 'validation-error',
   'maintenance-notice', 'release-notes', 'translation-en', 'translation-ru',
   'pricing-layout', 'dashboard-layout', 'output-format',
+  'practical-code', 'practical-text',
 ] as const;
 
 export const taskSchema = z.strictObject({
@@ -46,6 +47,9 @@ export const taskSchema = z.strictObject({
   }),
   reference: z.string().nullable(),
   readiness: z.enum(['draft', 'validated', 'enabled']),
+  execution: z.strictObject({ kind: z.enum(['frontend', 'ui-design', 'backend', 'sql', 'algorithms', 'debugging', 'refactoring', 'test-writing', 'devops', 'security']),
+    allowedFiles: z.array(z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/)).min(1), timeoutMs: z.number().int().positive().max(60_000) }).optional(),
+  validation: z.strictObject({ version: z.string().min(1), fixture: z.string().regex(/^fixtures\/[a-z0-9-]+\.json$/) }).optional(),
 }).superRefine((task, ctx) => {
   const problem = (message: string) => ctx.addIssue({ code: 'custom', message });
   if (!task.evaluationCategories.includes(task.primaryCategory)) problem('primaryCategory должна оцениваться');

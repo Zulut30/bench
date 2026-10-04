@@ -1,345 +1,256 @@
-# Practical Model Bench
+# Practical Model Bench · v1
 
-Практический бенчмарк на TypeScript и promptfoo: локальное mock-демо, небольшой
-pilot через OpenRouter или официальные подписочные CLI, ручной импорт из веб-чатов
-и слепое A/B-сравнение сохранённых ответов. По умолчанию работает mock.
-Во время разработки реальные генерации не запускались и подписочные квоты не расходовались.
+Локальный CLI на TypeScript и **promptfoo**: практические задания, проверка кода
+в контейнере, учёт usage и бюджета, история JSON/JSONL/PNG, статический HTML,
+сравнение моделей/систем и отдельное слепое A/B. По умолчанию — бесплатное mock-демо.
+Реальные генерации и подписочные квоты при разработке не использовались.
+Статус интеграций и ограничения: [готовность v1](docs/readiness.md).
 
-## Установка и бесплатная демонстрация
+## Установка
 
-Нужен Node.js 24 LTS; проверено на 24.16.0. Версии зависимостей закреплены в lockfile.
-Установка пакетов и Chromium требует интернета. Демо после установки работает локально
-без ключей: внешние fetch/HTTP/TCP-запросы Node.js блокируются, IPC разрешён.
+Нужны Node.js **24.16.0**, npm, Docker с работающим daemon и Chromium.
+Версии пакетов, контейнерных зависимостей и базовых образов закреплены.
+Установка пакетов/образов требует интернета; mock после установки работает локально.
 
 ```bash
 npm ci
 npm run browser:install
+npm run sandbox:build
 npm run typecheck
 npm test
-npm run bench
+npm run bench:smoke
 ```
 
-В Linux системные библиотеки браузера можно установить через
-`npx playwright install --with-deps chromium` в подготовленном окружении.
+Linux: сначала установите `bubblewrap` для CLI-подключений и библиотеки браузера:
+`npx playwright install --with-deps chromium`. macOS: Docker Desktop либо Colima.
+В этой рабочей папке подготовлен отдельный Colima-профиль `bench` без host mounts;
+его контекст выбирается явно: `export DOCKER_CONTEXT=colima-bench`.
+Установка и платформенные ограничения описаны в [docs/setup.md](docs/setup.md).
+`npm test` действительно исполняет код и браузер: отсутствие контейнера — ошибка,
+а не молчаливый пропуск. Windows-подключения CLI пока не поддерживаются.
 
-`npm run bench` и `npm run bench:demo` создают два различающихся **synthetic** запуска
-baseline/current: 10 заданий, по две попытки. В консоли будут `Baseline ID`, `Current ID`
-и пути к HTML. Откройте `report.html` в браузере; сервер не нужен.
-Демо содержит правильные/ошибочные ответы, технический повтор, reasoning, неполный
-usage, кеш провайдера и локальный готовый ответ. Фактические расходы API равны нулю.
+## Демонстрация и наборы
+
+```bash
+npm run bench                         # два прежних demo-запуска baseline/current
+npm run bench:demo
+npm run bench:smoke                   # 6 коротких практических задач, 1 попытка
+npm run bench:standard -- --attempts 2 # 16 категорий, 32 попытки
+```
+
+Demo сохраняет 10 задач × 2 попытки с правильными/ошибочными ответами, retries,
+reasoning, неполным usage, provider cache и локальным ответом из кеша.
+В консоли — `Baseline ID`, `Current ID`, ссылки на отчёты. API-расходы mock = **0 USD**;
+моделируемые цены synthetic показаны отдельно. Это не рейтинг реальных моделей.
 
 ```bash
 npm run bench -- --baseline <baseline-id> --current <current-id>
 npm run bench:compare -- --baseline <baseline-id> --current <current-id>
 ```
 
-Замените `<...>` напечатанными ID без угловых скобок. Compare читает историю;
-новых генераций и судей не вызывает. Каждое сравнение сохраняется отдельно.
+Подставьте напечатанные IDs без угловых скобок. HTML открывается как обычный файл,
+сервер не нужен. Каждое сравнение сохраняется отдельно, генераций не вызывает.
 
-## Первый pilot: пять задач
+`benchmarks/standard.json` содержит **16 независимых заданий**, одно primary на
+категорию. Каждое имеет версию, фиксированные материалы, критерии, рубрику, лимиты,
+два разных правильных примера и содержательный пример дефекта. Все **48 примеров**
+проверяются тестами. Smoke выбирает frontend/backend/sql/writing/translation/
+instruction-following; оставшиеся 10 категорий показывает как непокрытые.
+`--profile pilot` сохраняет совместимость со старым набором из пяти задач.
 
-`benchmarks/pilot.json` содержит форму HTML, JSON-контракт пагинации, уведомление
-о работах, перевод и страницу тарифов. Реестр сохраняет все 16 категорий.
-Пять основных направлений плюс `instruction-following` дают шесть категорий
-с заданиями; остальные десять явно показаны как **не покрыто**.
+| Проверка | Что реально исполняется |
+| --- | --- |
+| frontend | TypeScript strict + Playwright: ошибки/успех/повтор формы, 1440/390 px, PNG |
+| backend | Node HTTP-сервер: пагинация, пустая страница, неверные параметры, 400/404/405 |
+| SQL / security | SQLite на фиксированных данных; LEFT JOIN, нули, SQL injection |
+| algorithms / debugging / refactoring | Граничные примеры, отсутствие мутации входа / сохранение поведения |
+| test-writing | Исправная shipping-функция и 4 заранее внесённых дефекта; измеряется обнаружение |
+| DevOps | Контракт Dockerfile и реальный start.sh/health; кандидатский Dockerfile не собирается |
+| текст / редактура / перевод / архитектура / дизайн | Источники, числа, формат, обязательные элементы; субъективное pending |
+| long-context / instruction-following | Связывание фактов из фиксированных материалов / строгий JSON |
 
-Бэкенд здесь проверяет **JSON-контракт ответа**, не сервер и не серверный код.
-HTML/CSS проверяются Playwright в Chromium при 1440×900 и 390×844, с настоящими
-скриншотами. JavaScript кандидата, service workers и сеть страницы отключены.
-Факты, числа, формат и обязательные элементы проверяются относительно материалов.
-Проверки и эталоны в промпт и рабочую папку кандидата не попадают.
+Одна задача на категорию даёт диагностику, не статистически надёжный рейтинг.
+Для полного замера остаётся расширить набор до 40–50 задач. Автоматические pass rate
+и субъективные оценки разделены; непроведённое имеет null/pending.
+
+## Команды на каждый день
 
 ```bash
-npm run bench -- diagnose
-npm run bench -- dry-run --provider mock
-npm run bench -- run --provider mock
+npm run bench -- diagnose --provider mock
+npm run bench -- dry-run --provider mock --profile standard --attempts 2
+npm run bench -- run --provider mock --profile smoke
+npm run bench -- resume --run <run-id>
+npm run bench -- compare --baseline <id> --current <id>
+npm run bench -- export --run <id> --output ./export-unique
 ```
 
-Последняя команда выполняет пять правильных fixtures с одной попыткой и сохраняет
-`Run ID`. Для проверки pilot-сравнения выполните её дважды:
+Run требует явного `--provider`, по умолчанию выбирает smoke. `--attempts 1–10`,
+`--tasks v1-sql,v1-backend`, `--profile smoke/standard/pilot`, `--config <JSON>`
+и `--results-dir <путь>` задают условия. Локальные конфиги `configs/local-*.json`
+исключены из Git. `.env` автоматически не загружается, ключей в репозитории нет.
 
-```bash
-npm run bench -- compare --baseline <первый-run-id> --current <второй-run-id>
-```
+События состояний и ошибок — JSON в stderr; итог и пути — stdout.
+Коды: **0** — завершённый прогон (включая объективный провал/pending), **2** —
+аргументы/невосстановленная ошибка, **3** — подключение/формат/изоляция, **4** —
+бюджет, **5** — квота, **6** — таймаут, **7** — in_doubt, **130** — Ctrl+C.
+Провал задания — измеренный результат, технический пропуск — отсутствие оценки.
 
-`dry-run` не генерирует ответы. Для API он получает публичные metadata, показывает
-план, верхнюю цену, лимиты и решения резервирования на копии журнала; журнал не меняет.
-`--results-dir ./results-pilot` задаёт отдельную историю и отдельный месячный бюджет.
+Ctrl+C останавливает транспорт, сохраняет вызовы и план. `resume` использует
+исходные настройки и ту же папку: completed/failed не генерируются повторно,
+planned/reserved продолжаются. **Dispatched без надёжного результата → in_doubt**:
+автоматической повторной отправки нет. Изменившийся код измерений блокирует resume;
+данные доступны для сверки/экспорта. Экспорт требует новую папку; у незавершённого
+запуска включает `recovery-state.json`, у завершённого проверяет integrity.
 
-## Подключения и условия
+## Первый ограниченный реальный прогон
 
-| Provider | Вход / billingMode | Режим и границы |
-| --- | --- | --- |
-| `mock` | без входа / mock | synthetic fixtures, API = 0 |
-| `openrouter` | `OPENROUTER_API_KEY` / api | model-only, закреплённые model ID и endpoint tag |
-| `codex-cli` | официальный ChatGPT login / subscription | agent, read-only sandbox, без поиска и пользовательских правил |
-| `claude-code` | официальный claude.ai login / subscription | model-only с пустым списком tools; agent с Read/Glob/Grep |
-| `gemini-cli` | официальный Google login / subscription | agent; изоляция и ограничения клиента, overage never |
-| `manual` | пользовательская веб-сессия / manual | условия заявлены пользователем, usage неизвестен |
+Выберите модель и точный endpoint самостоятельно; встроенного выбора платной модели нет.
+Подключения OpenRouter, Codex CLI, Claude Code, Gemini CLI и manual реализованы,
+но **не проверены реальными генерациями**. Следующие команды запускаются пользователем.
 
-API, CLI и веб-чат сохраняются как разные системы. Codex/Gemini не объявляются
-model-only, поскольку полное отключение всех инструментов не гарантируется.
-Клиенты запускаются через аргументы и stdin с `shell: false`, в новой сессии
-и новой временной папке на каждую попытку/повтор. Их JSON/JSONL валидируется.
-
-CLI использует вход официального клиента; бенчмарк не читает OAuth credentials
-и не обращается к внутренним API веб-чатов. В окружение дочернего процесса
-не передаются API-ключи/токены из процесса бенчмарка. Нужен `sandbox-exec` на macOS
-или `bwrap` на Linux; диагностика проверяет песочницу командой `--version`.
-Без неё генерация блокируется. macOS блокирует доступ к проекту и results;
-Linux дополнительно ограничивает доступные каталоги. Это не универсальная VM:
-официальному клиенту необходим доступ к его собственному хранилищу входа.
-
-Конфиги: `configs/pilot-{mock,openrouter,codex-cli,claude-code,gemini-cli,manual}.json`.
-Конкретные реальные модели намеренно не выбраны. При необходимости задайте
-`executable`, `clientHome`, режим и сведения о подписке в локальной копии конфига.
-`.env` автоматически не загружается; `.env.example` содержит только пустое поле ключа.
-
-`diagnose` выполняет только `--version`, `--help`, status официального входа
-и/или публичные metadata. Личные данные и credential store не экспортирует.
-Доступность конкретной CLI-модели аккаунту без генерации остаётся `unverified`.
-Есть отдельные статусы отсутствующего клиента/входа/модели, неверного JSON,
-квоты, таймаута, несовместимых флагов, изоляции и изменённого маршрута.
-Квота останавливает оставшиеся вызовы; автоматического перехода на платный API нет.
-
-### OpenRouter
-
-Экспортируйте свой `OPENROUTER_API_KEY` в окружение терминала. Ключ не пишется
-в конфиги, запросы-артефакты, HTML или логи. Выберите доступный конкретный model ID:
+Экспортируйте `OPENROUTER_API_KEY` в своём терминале, затем:
 
 ```bash
 export MODEL_ID='выбранный-author/model-id'
 npm run bench -- diagnose --provider openrouter --model "$MODEL_ID"
+export ENDPOINT_TAG='точный-tag-из-availableEndpoints'
+npm run bench -- dry-run --provider openrouter --model "$MODEL_ID" --endpoint "$ENDPOINT_TAG" --profile smoke --tasks v1-writing --attempts 1 --budget 0.05
+npm run bench -- run --provider openrouter --model "$MODEL_ID" --endpoint "$ENDPOINT_TAG" --profile smoke --tasks v1-writing --attempts 1 --budget 0.05
+npm run bench -- reconcile --run <run-id>
 ```
 
-Без endpoint команда покажет `availableEndpoints` из публичных metadata и статус
-`model_missing`. Затем выберите точный `tag`, а не общее имя провайдера:
+Diagnose/dry-run не вызывают генераций. Бюджет 0.05 — предел, не обещание цены:
+если dry-run отказал, запрос не отправится. Лимиты конфига дополнительно ограничивают
+запрос (0.05), задачу (0.15), месяц (1 USD, Europe/Warsaw). `only/order`, отключённые
+fallback и compression/plugins фиксируют маршрут; actual model/provider/ID сохраняются.
+Резерв включает выход/reasoning, максимальную ставку обычного/cache-входа,
+request/image fees и разрешённые retries. Неизвестные платные параметры и нетекстовый
+выход (image/audio) блокируются.
+
+Если framing конкретного upstream неизвестен, честный fallback — его context limit.
+Literal raw Llama3 byte-bound доказан на локальном HTTP-контракте; семейство tokenizer
+само по себе **не позволяет уменьшить реальный резерв OpenRouter**. Подробности в
+[решениях v1](docs/decisions.md). Dry-run показывает метод и числовые spent/reserved/
+next/limit каждого отказа, не меняя бюджет.
+
+`reconcile` выполняет **GET /generation**, не генерацию. При terminal total_cost
+начисление сверяется в SQLite, неизвестный резерв освобождается. Исходные артефакты
+остаются прежними; результат сверки сохраняется в `reconciliations/`.
+Без ID/окончательной цены резерв удерживается. Найдите ID в OpenRouter Activity:
+
+```json
+{"calls":[{"callId":"точный-callId-из-events/SQLite","generationId":"gen-..."}]}
+```
 
 ```bash
-export ENDPOINT_TAG='выбранный-endpoint-tag'
-npm run bench -- dry-run --provider openrouter --model "$MODEL_ID" --endpoint "$ENDPOINT_TAG" --budget 0.20
-npm run bench -- run --provider openrouter --model "$MODEL_ID" --endpoint "$ENDPOINT_TAG" --budget 0.20
+npm run bench -- reconcile --run <id> --input ./generation-mapping.json
 ```
 
-Последняя команда — реальная платная генерация; запускайте её сами после dry-run.
-`run` требует явного `--provider`, API дополнительно требует `--budget > 0`.
-Этот аргумент задаёт лимит запуска; конфиг также ограничивает запрос (0.05 USD),
-задачу (0.15 USD), месяц (1 USD) и таймзону. Бюджет 0.20 — пример лимита,
-не обещание стоимости или достаточности для любого endpoint.
+Сверяйте JSON с Activity/биллингом. Сбой до получения ID нельзя доказательно назвать
+бесплатным; резерв вручную не удаляйте. Списания других проектов по тому же ключу
+местный журнал не контролирует. Для одного бюджета используйте один results-dir.
 
-`provider.only/order` содержат единственный tag, `allow_fallbacks: false`,
-`require_parameters: true`; router-варианты и автоматическая замена запрещены.
-Сохраняются фактически возвращённые model/provider/generation ID, metadata и тариф.
-Уход с закреплённого маршрута останавливает следующие запросы.
+## Подписочные CLI и ручной импорт
 
-### Подписочные клиенты
-
-Войдите через собственные официальные команды клиента. Диагностика без генерации:
+Официальный вход остаётся в клиенте. Бенчмарк не читает OAuth credentials, не
+передаёт env-ключи и не переходит на платный API. Генерация идёт в новой сессии/
+временной папке с sandbox-exec (macOS) или bubblewrap (Linux); без изоляции блокируется.
+Полученный код отдельно выполняется в Docker, куда хранилище входа не попадает.
+Codex/Gemini маркируются **agent**, Claude без tools и OpenRouter — **model-only**.
+Температура CLI неизвестна; Codex/Claude reasoning=none применяется как low.
+Codex/Gemini output cap наблюдаемый, жёсткая гарантия провайдера не заявляется.
 
 ```bash
 npm run bench -- diagnose --provider codex-cli --model "$CODEX_MODEL_ID"
-npm run bench -- diagnose --provider claude-code --model "$CLAUDE_MODEL_ID"
-npm run bench -- diagnose --provider gemini-cli --model "$GEMINI_MODEL_ID"
+npm run bench -- dry-run --provider codex-cli --model "$CODEX_MODEL_ID" --tasks v1-writing --attempts 1
+npm run bench -- run --provider codex-cli --model "$CODEX_MODEL_ID" --tasks v1-writing --attempts 1
 ```
 
-Переменные должны содержать конкретные IDs, доступные вашему аккаунту, а не
-псевдонимы auto/pro/flash/opus/sonnet. Для первого запуска через ChatGPT:
-
-```bash
-npm run bench -- dry-run --provider codex-cli --model "$CODEX_MODEL_ID"
-npm run bench -- run --provider codex-cli --model "$CODEX_MODEL_ID"
-```
-
-Для Claude **сначала отключите Usage credits в аккаунте**, затем в локальной копии
-`configs/pilot-claude-code.json` явно задайте
-`candidate.subscription.paidOverage: "disabled"`. Пока поле unknown, генерация
-получает `subscription_policy_unknown`. Это ваше заявление о состоянии аккаунта:
-CLI не раскрывает проверяемый без генерации серверный переключатель.
-`DISABLE_EXTRA_USAGE_COMMAND` скрывает команду интерфейса, не отключает биллинг.
-`--bare` не используется: он исключает подписочный OAuth-вход.
-
-```bash
-npm run bench -- dry-run --provider claude-code --config configs/local-claude.json --model "$CLAUDE_MODEL_ID"
-npm run bench -- run --provider claude-code --config configs/local-claude.json --model "$CLAUDE_MODEL_ID"
-npm run bench -- run --provider gemini-cli --model "$GEMINI_MODEL_ID"
-```
-
-Температура CLI неизвестна (`null`). Для Codex/Claude запрошенное reasoning=none
-применяется как effort=low и так записывается; Gemini использует настройки клиента,
-reasoning неизвестен. OpenRouter получает точные параметры запроса.
-Claude имеет настройку max output; Codex/Gemini проверяют наблюдаемый выход после
-ответа. Таймаут, размер stdout и число шагов ограничены до/во время процесса.
-Жёсткая провайдерская граница output у этих CLI не заявляется.
-
-### Ручной импорт
+Нужны конкретные доступные model IDs. Для Claude сначала отключите **Usage credits**
+в аккаунте, затем укажите `candidate.subscription.paidOverage: "disabled"` в своей
+копии `configs/pilot-claude-code.json`. Это заявление пользователя, серверный флаг
+CLI проверить не умеет; unknown блокирует генерацию. `--bare` не используется.
+Gemini требует oauth-personal и отключённый overage. Квота останавливает дальнейшие
+вызовы; доступные токены и цена подписки задаются пользователем, не угадываются.
 
 ```bash
 npm run bench -- manual-template --output ./manual-answers.json
 npm run bench -- import --input ./manual-answers.json
 ```
 
-Шаблон содержит точные `prompts` и хеши. В новой веб-сессии для каждой попытки
-скопируйте соответствующий промпт, затем заполните ответ, уникальный `sessionId`,
-модель, версию/дату веб-клиента, фактические tools и известное время (или null).
-Не меняйте promptHash; `newSession` должно быть true. Неисполненные ответы удалите
-из answers: они станут пропусками. Повтор сессии, изменённый промпт и model-only
-с инструментами отклоняются. Точные usage, списания и скрытые повторы — null;
-время обработки импорта отделено от неизвестного времени генерации.
+Шаблон фиксирует промпты/хеши; каждый ответ — новая веб-сессия. Заполните модель,
+tools, версию веб-клиента и известное время/null. Manual usage и скрытые вызовы
+неизвестны; импорт отделяет время обработки от времени генерации.
 
-## Судьи и ручная калибровка
+## Слепые судьи и сравнение
 
-Объективные проверки выполняются первыми. Проверка maintenance-текста теперь
-отклоняет явные отрицания/противоречия, включая «Остальные функции не будут работать».
-Правильные перефразировки принимаются; неопределённый смысл не объявляется доказанным.
-Смысл уведомления, естественность перевода и дизайн сохраняют `pending`.
-Непроведённая оценка имеет null, а не нулевой балл.
-
-Судьи запускаются отдельной командой по сохранённой baseline/current-паре.
-Они имеют **отдельный явный API-бюджет**: кандидатский запуск не вызывает их автоматически.
-Скопируйте `configs/pilot-judges.json` в `configs/local-judges.json`; задайте конкретные
-`judges.text.model/providerEndpoint` и/или `judges.vision.model/providerEndpoint`.
-Не используемый тип судьи оставьте null. Нужен OPENROUTER_API_KEY.
+Скопируйте `configs/pilot-judges.json` в `configs/local-judges.json`; задайте реальные
+`judges.text`/`judges.vision` model+endpoint, ненужный тип оставьте null.
+Судьи имеют **отдельный явный API-бюджет** и работают по сохранённым ответам:
 
 ```bash
-npm run bench -- evaluate --baseline <baseline-id> --current <current-id> --config configs/local-judges.json --budget 0.10 --limit-pairs 1
-npm run bench -- compare --baseline <baseline-id> --current <current-id> --evaluation <evaluation-id>
-```
-
-Без подходящего text/vision-судьи вердикт pending, запросов нет. Пара с объективным
-провалом/пропуском или несовместимыми условиями не отправляется судье.
-Кандидатские названия моделей скрыты, A/B выбирается случайно; судья получает
-задачу, источники и версионированную рубрику. Сохраняются порядок, причина и строгий
-вердикт A/B/tie/insufficient_data. Для vision нужны четыре настоящих PNG: A/B, ПК/телефон.
-`--swap-order` повторяет оценку в обратном порядке в пределах maxJudgeCalls/бюджета;
-разные победители показываются как спор. При maxRetries=1 два порядка могут не
-поместиться в лимит 2 вызова: для калибровки задайте maxRetries=0.
-
-A/B — относительное предпочтение. Оно не превращает исходный pending в фиктивный
-абсолютный успех/балл. Оценка сохраняется отдельно, история кандидатов не меняется.
-Отчёт оценки содержит страницы `*-blind.html` для ручной проверки. Начните
-с небольшой выборки (ориентир 10% и спорные пары), затем создайте reviews.json:
-
-```json
-{
-  "reviewer": "ваш-идентификатор",
-  "reviews": [
-    { "pairId": "maintenance-notice-a1-text-order1", "verdict": "tie", "reason": "Оба ответа сохраняют факты и смысл" }
-  ]
-}
-```
-
-```bash
+npm run bench -- evaluate --baseline <id> --current <id> --config configs/local-judges.json --budget 0.05 --limit-pairs 1 --swap-order
+npm run bench -- compare --baseline <id> --current <id> --evaluation <evaluation-id>
+npm run bench -- calibrate-sample --evaluation <evaluation-id>
 npm run bench -- calibrate --evaluation <evaluation-id> --input ./reviews.json
 ```
 
-Ручные решения и agreement/null сохраняются отдельным неизменяемым артефактом.
-Калибровка не объявляется проведённой до импорта реальных ручных решений.
+Судья получает A/B без названий моделей, случайный порядок, задачу/источники и
+версионированную рубрику. Vision получает настоящие PNG A/B при 1440/390 px.
+JSON-вердикты: A/B/tie/insufficient_data + причина. Смена порядка выявляет споры.
+Без судьи — pending; объективный провал/пропуск или другая рубрика исключает пару.
+**Разные модели, endpoint и CLI допустимы для A/B**, различия систем показываются.
+A/B — относительное предпочтение, не абсолютный pass/балл.
 
-## Usage, деньги и бюджет
+`calibrate-sample` случайно выбирает около 10% уникальных пар задача/попытка
+и все споры, сохраняя слепые страницы и `reviews-template.json`. Заполните копию
+шаблона: reviewer, verdict, reason; импортируйте через calibrate. Незаполненные
+null не принимаются. Ручная калибровка не объявляется выполненной автоматически.
 
-Для каждого вызова сохраняются исходный usage, inputTotal/outputTotal, reasoning,
-cacheRead/cacheWrite, источник/полнота, роль candidate/judge, retry, agentSteps,
-clientVersion, модель/маршрут, applied/requested настройки, время и артефакты.
-Неизвестные поля — null. Итог — только inputTotal + outputTotal:
+Compare разделяет модели, системы и мониторинг. Регрессия требует совпадения
+клиента/инструментов/параметров/проверок/окружения и подтверждённого actual route.
+Manual/unknown route не даёт автоматического сигнала. Оформление HTML не входит
+в fingerprint измерений. Совпадающие задачи сопоставляются независимо от числа
+попыток; разброс и независимое число задач видимы. Отрицательная разница — suspected:
 
-| Адаптер | Правило включения |
-| --- | --- |
-| OpenRouter / Codex | кеш уже в input, reasoning уже в output |
-| Claude | обычный input + cache read + cache write; output без повторного reasoning |
-| Gemini | prompt + tool-input; candidates + thoughts; cached уже в prompt |
-| mock | synthetic input включает кеш, output включает reasoning |
-
-Сводки Claude/Gemini и финальная сводка одного Codex exec учитываются один раз;
-промежуточные сообщения/дублирующие modelUsage/roles не суммируются с ними.
-Внутренние повторы, которые клиент не раскрывает, остаются неизвестными.
-Сохраняется сырой поток для проверки предположений после смены версии клиента.
-
-`billingMode` отделяет api/subscription/manual/mock. Для API usage.cost — фактическое
-списание; modeledCostUsd — отдельно расчёт по опубликованному тарифу токенов.
-Дополнительные request/image charges учитываются в резерве, а точная итоговая сумма
-берётся из actual cost. Для Claude total_cost_usd — только API-эквивалентная оценка.
-Подписочная генерация не является отдельным API-списанием этого проекта (API = 0);
-fixedMonthlyUsd, availableTokens и knownLimits задаёт пользователь и видит отдельно.
-Остаток подписочной квоты не выдумывается и автоматически не запрашивается.
-Mock-токены и деньги synthetic, manual точных начислений не заявляет.
-
-Агрегация дедуплицирует callId и считает расходы по primaryCategory, не по сумме
-пересекающихся оценок. Модель, судья, повторы, agent steps и общее списание видны
-отдельно. Цена полного успеха включает все попытки того же набора и судью;
-при нуле успехов/неизвестных начислениях — null. Расходы разработки сюда не входят.
-
-До POST резервируется верхняя цена **всего опубликованного контекста endpoint**
-(включая возможные изображения), максимального выхода и разрешённых повторов.
-Это консервативный резерв: даже короткая задача может не поместиться в маленький
-лимит endpoint с большим/дорогим контекстом. Dry-run показывает это заранее.
-Unknown tariff/upper bound блокирует API. Одновременные вызовы видят общие резервы.
-
-Журналы `.api-budget.json` и `.synthetic-budget.json` несовместимы и раздельны.
-Общий `.bench.lock` защищает историю и журнал от параллельных процессов в одном
-results-dir. Используйте **один results-dir для общего API-бюджета**: разные каталоги
-не имеют общего lock/месячного лимита. Известное списание замещает резерв; unknown
-удерживает его до сверки. Начисление выше резерва замораживает журнал.
-Отказ бюджета до отправки — `budget_exhausted`, не провал качества.
-При аварии не удаляйте lock до проверки PID; автоматического сброса/сверки денег нет.
-Биллинг внешних вызовов по тому же ключу этот локальный журнал не контролирует.
-
-## История и сравнение
-
-```text
-results/
-  .api-budget.json / .synthetic-budget.json
-  <run-id>/
-    manifest.json, calls.jsonl, attempts.jsonl, summary.json
-    promptfoo.json, prompts/*.txt, responses/*.{txt,json}
-    checks/*.json, screenshots/*.png, report.html, integrity.json
-  evaluations/evaluation-<uuid>/
-    evaluation.json, calls.jsonl, summary.json, report.html
-    *-blind.html, *-judge-request.json, responses/, integrity.json
-  calibrations/calibration-<uuid>/calibration.json
-  comparisons/compare-<uuid>/{comparison.json,report.html,integrity.json}
+```bash
+npm run bench -- rerun --comparison <compare-id> --attempts 3 --budget 0.05
 ```
 
-Файлы создаются без перезаписи. Перед чтением истории проверяется SHA-256 integrity;
-это обнаружение изменений, не криптографическая подпись. При аварии сохраняется
-failure.json и частичные артефакты. Manifest фиксирует хеши задач/промптов/материалов,
-commit, зависимости, реализацию, браузер, клиента, tools, настройки и лимиты.
+Это явная команда **свежих генераций** затронутых задач, с новым run ID, без кеша
+готовых ответов. Для mock бюджет не нужен. Сама по себе отрицательная разница
+не подтверждает ухудшение и не устанавливает внутреннюю причину поведения модели.
 
-Сравниваются совпадающие задания и попытки. Для pilot несовместимые версии клиента,
-tools, режимы, настройки/окружение исключают автоматическое сравнение качества.
-Изменение requested/actual маршрута показано отдельно; неизвестная actual-модель/
-провайдер, как часто у Codex, не даёт автоматического сигнала регрессии.
-Manual всегда исключён из автоматического сигнала. Разные оболочки отмечаются
-как сравнение систем. Пропуски не превращаются в ошибки качества, расходы остаются.
-Один слабый ответ даёт максимум suspected; нужна свежая повторная попытка.
-Кеш готовых ответов promptfoo отключён, зависимости повторов и неопределённость видны.
+## Учёт, сохранность и проверки
 
-## Проверки и оставшиеся ограничения
+InputTotal включает весь вход и кеш; outputTotal весь выход с reasoning.
+Итог = input + output; подмножества не прибавляются повторно. Для Claude кеш
+добавляется к обычному input; Gemini — prompt + tool и candidates + thoughts.
+Каждый клиент нормализуется отдельно, финальные сводки не складываются с событиями.
+Unknown — null. API actual, оценки кандидата/судьи/retries, API-эквивалент и фиксированная
+подписка показаны отдельно; цена успеха неопределена при нуле полных успехов.
 
-`npm test` проверяет нормализацию/двойной счёт, бюджет/резервы/месяц, агрегацию,
-maintenance-отрицания и парафразы, настоящее promptfoo-демо, артефакты/lock/HTML,
-локальный HTTP и fake CLI: успех, отсутствие usage, auth/quota/model error, timeout,
-неверный JSON, закрепление маршрута, новые сессии, отсутствие ключей/доступа к эталонам,
-бюджет до POST, слепое A/B/реальные PNG, смену порядка, ручной импорт и калибровку.
+`.bench.sqlite` (WAL/FULL) хранит транзакционные бюджеты, вызовы, планы, оценки и
+PID/token lease. Фазы planned/reserved/dispatched/completed/failed/in_doubt сохраняются
+до транспорта; reserve + переход и settlement + charge атомарны. Старый JSON-журнал
+мигрируется идемпотентно с проверкой хеша и сохранением оригинала. Неизвестные
+начисления удерживают резерв, превышение границы замораживает дальнейшие расходы.
 
-На этой машине диагностированы Codex CLI 0.147.0 и Claude Code 2.1.257;
-Gemini CLI отсутствует. Реальные генерации через них и OpenRouter не проверялись
-по требованию пользователя. Проверена macOS-изоляция; Linux требует bubblewrap
-и отдельной проверки в целевом окружении. Флаги несовместимого клиента блокируют запуск.
+Папки запуска неизменяемы: manifest, plan, responses, calls/attempts/events JSONL,
+checks, PNG, promptfoo summary, HTML, integrity. Атомарная публикация не заменяет
+файлы истории. Resume восстанавливает оборванный хвост собственного незавершённого
+журнала из SQLite, сохраняя повреждённые байты. Завершённая история проверяется хешами.
 
-Набор из пяти задач диагностический. Полный набор 40–50, выполнение серверных проектов,
-надёжная изоляция произвольного кода, подтверждённые реальные замеры, мониторинг,
-SQLite и веб-панель остаются дальнейшей работой.
+```bash
+npm run typecheck
+npm test
+npm run release:check
+```
 
-Зависимости сохранены на фиксированных версиях; статус npm audit и принятые решения
-описаны в [docs/decisions.md](docs/decisions.md), план — в [docs/roadmap.md](docs/roadmap.md).
-
-Официальные источники: [promptfoo Node API](https://www.promptfoo.dev/docs/usage/node-package/),
-[OpenRouter routing](https://openrouter.ai/docs/guides/routing/provider-selection),
-[OpenRouter usage](https://openrouter.ai/docs/guides/guides/usage-accounting),
-[Codex non-interactive](https://developers.openai.com/codex/noninteractive),
-[Codex config](https://developers.openai.com/codex/config-reference),
-[Claude CLI](https://code.claude.com/docs/en/cli-reference),
-[Claude costs](https://code.claude.com/docs/en/costs),
-[Gemini headless](https://geminicli.com/docs/cli/headless/),
-[Gemini configuration](https://geminicli.com/docs/reference/configuration/).
-Документация также проверялась через Context7; флаги установленных клиентов — через --help.
+Тесты: 48 примеров, UTF-8 по байтам, учёт/cache/reasoning, preflight refusal,
+параллельные процессы, SIGKILL на всех фазах, восстановление/сверка/unknown,
+квота/таймаут/неверный JSON, Ctrl+C, разные CLI/A-B/PNG, контейнерные ограничения,
+fresh rerun и неизменность экспорта/истории. GitHub Actions проверяет чистую установку,
+Docker/Chromium, typecheck, тесты и mock-smoke **без внешних генераций**.
+Есть 3 high сообщения npm audit одной транзитивной цепочки node-forge/jks-js/promptfoo без доступного
+исправленного forge; они и границы готовности перечислены в docs/readiness.md.

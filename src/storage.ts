@@ -1,12 +1,27 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
+import { closeSync, existsSync, fsyncSync, linkSync, mkdirSync, openSync, readFileSync, readdirSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join, resolve, relative, isAbsolute } from 'node:path';
 import type { SavedRun } from './types.js';
+import type { StateStore } from './state.js';
 
 export function hash(value: string | Buffer): string { return createHash('sha256').update(value).digest('hex'); }
 export function readJson(path: string): unknown { return JSON.parse(readFileSync(path, 'utf8')); }
-export function writeJson(path: string, value: unknown): void { writeFileSync(path, JSON.stringify(value, null, 2) + '\n', { flag: 'wx' }); }
-export function appendJsonl(path: string, value: unknown): void { writeFileSync(path, JSON.stringify(value) + '\n', { flag: 'a' }); }
+// Публикация целого файла атомарна; link не заменяет уже существующий артефакт.
+export function immutableWrite(path: string, content: string | Buffer): void {
+  const next = `${path}.${randomUUID()}.tmp`, fd = openSync(next, 'wx');
+  try { writeFileSync(fd, content); fsyncSync(fd); } finally { closeSync(fd); }
+  try { linkSync(next, path); } finally { unlinkSync(next); }
+}
+export function writeJson(path: string, value: unknown): void { immutableWrite(path, JSON.stringify(value, null, 2) + '\n'); }
+export function writeOnce(path: string, content: string): void {
+  if (existsSync(path)) { if (readFileSync(path, 'utf8') !== content) throw new Error(`Сохранённый артефакт отличается: ${path}`); return; }
+  immutableWrite(path, content);
+}
+export function writeJsonOnce(path: string, value: unknown): void { writeOnce(path, JSON.stringify(value, null, 2) + '\n'); }
+export function appendJsonl(path: string, value: unknown): void {
+  const fd = openSync(path, 'a');
+  try { writeFileSync(fd, JSON.stringify(value) + '\n'); fsyncSync(fd); } finally { closeSync(fd); }
+}
 export function readJsonl<T>(path: string): T[] {
   return readFileSync(path, 'utf8').split('\n').filter(Boolean).map((line) => JSON.parse(line) as T);
 }
@@ -53,11 +68,24 @@ export function verifyIntegrity(dir: string, required: string[] = []): void {
   }
 }
 
-export async function withProjectLock<T>(root: string, action: () => Promise<T>): Promise<T> {
+export async function withProjectLock<T>(root: string, action: (store: StateStore) => Promise<T>): Promise<T> {
   mkdirSync(root, { recursive: true });
   const path = join(root, '.bench.lock');
-  if (existsSync(path)) throw new Error('Каталог results занят (.bench.lock). Дождитесь текущего запуска; после аварии проверьте PID из файла.');
-  try { writeJson(path, { pid: process.pid, startedAt: new Date().toISOString() }); }
-  catch { throw new Error('Другой процесс уже удерживает .bench.lock'); }
-  try { return await action(); } finally { unlinkSync(path); }
+  const alive = (pid: number) => { try { process.kill(pid, 0); return true; } catch (error) { return (error as NodeJS.ErrnoException).code !== 'ESRCH'; } };
+  if (existsSync(path)) {
+    const old = readJson(path) as { pid?: number };
+    if (!Number.isSafeInteger(old.pid) || alive(old.pid!)) throw new Error('Каталог results занят (.bench.lock)');
+    // Старый маркер сохраняется; снятие только после проверки отсутствующего PID.
+    renameSync(path, `${path}.stale-${randomUUID()}`);
+  }
+  const { StateStore } = await import('./state.js'); const store = new StateStore(root), token = randomUUID();
+  try {
+    store.transaction(() => {
+      const lease = store.db.prepare('SELECT pid FROM leases WHERE name=?').get('project') as { pid: number } | undefined;
+      if (lease && alive(lease.pid)) throw new Error('Каталог results занят (.bench.lock / SQLite lease)');
+      store.db.prepare('INSERT INTO leases VALUES (?,?,?) ON CONFLICT(name) DO UPDATE SET pid=excluded.pid,token=excluded.token').run('project', process.pid, token);
+    });
+    try { return await action(store); }
+    finally { store.transaction(() => { store.db.prepare('DELETE FROM leases WHERE name=? AND token=?').run('project', token); }); }
+  } finally { store.close(); }
 }

@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomInt, randomUUID } from 'node:crypto';
@@ -15,9 +15,9 @@ import type { Task } from './schema.js';
 import type { CallRecord, SavedRun, AttemptRecord } from './types.js';
 import { apiLedger } from './pilot.js';
 import { environment, prepareOfflineRuntime, projectRoot, taskPrompt } from './runner.js';
-import { escapeHtml } from './report.js';
+import { blindReviewHtml, evaluationHtml } from './report.js';
 import { redact } from './connections/process.js';
-import { finalizeIntegrity, hash, loadRun, readJson, readJsonl, verifyIntegrity, withProjectLock, writeJson } from './storage.js';
+import { finalizeIntegrity, hash, loadRun, readJson, readJsonl, verifyIntegrity, withProjectLock, writeJson, writeJsonOnce, writeOnce } from './storage.js';
 import { withApiNetwork } from './offline.js';
 
 export const verdictSchema = z.strictObject({ verdict: z.enum(['A', 'B', 'tie', 'insufficient_data']), reason: z.string().min(1).max(4000) });
@@ -28,6 +28,7 @@ export interface JudgedPair {
   verdict: Verdict['verdict'] | null; winner: 'baseline' | 'current' | 'tie' | 'insufficient_data' | null;
   status: 'evaluated' | 'pending' | 'not_evaluated'; reason: string; callIds: string[];
   promptHash: string; artifacts: string[];
+  executionStatus?: Execution['status'];
 }
 export interface EvaluationArtifact {
   schemaVersion: 1; evaluationId: string; baselineRunId: string; currentRunId: string;
@@ -56,11 +57,25 @@ function objectivePass(attempt: AttemptRecord, task: Task): boolean {
   return ['passed', 'pending'].includes(attempt.status) && weight > 0 && !attempt.checks.some((c) => c.critical && !c.pass) && attempt.checks.reduce((s, c) => s + c.weight * c.score, 0) / weight >= task.passThreshold;
 }
 export async function evaluateSaved(root: string, baselineId: string, currentId: string, config: RunConfig,
-  options: { budgetUsd?: number; swapOrder?: boolean; limitPairs?: number; apiBaseUrl?: string; connections?: Partial<Record<'text' | 'vision', ModelConnection>> } = {}) {
-  return withProjectLock(root, () => withApiNetwork(options.apiBaseUrl ?? 'https://openrouter.ai/api/v1', async () => {
+  options: { budgetUsd?: number; swapOrder?: boolean; limitPairs?: number; apiBaseUrl?: string; connections?: Partial<Record<'text' | 'vision', ModelConnection>>; resumeId?: string; signal?: AbortSignal; fault?: (point: string) => void; log?: (event: Record<string, unknown>) => void } = {}) {
+  return withProjectLock(root, (store) => withApiNetwork(options.apiBaseUrl ?? 'https://openrouter.ai/api/v1', async () => {
     const baseline = loadRun(root, baselineId), current = loadRun(root, currentId), comparison = compareRuns(baseline, current);
-    const evaluationId = `evaluation-${randomUUID()}`, dir = join(root, 'evaluations', evaluationId);
-    mkdirSync(dir, { recursive: true }); mkdirSync(join(dir, 'responses')); writeFileSync(join(dir, 'calls.jsonl'), '', { flag: 'wx' });
+    const evaluationId = options.resumeId ?? `evaluation-${randomUUID()}`, dir = join(root, 'evaluations', evaluationId);
+    const finish = (final: { artifact: EvaluationArtifact; calls: CallRecord[] }) => {
+      writeJsonOnce(join(dir, 'evaluation.json'), final.artifact); writeJsonOnce(join(dir, 'summary.json'), summarizeCalls(final.calls, []));
+      writeOnce(join(dir, 'report.html'), evaluationHtml(final.artifact, final.calls));
+      if (!existsSync(join(dir, 'integrity.json'))) finalizeIntegrity(dir);
+      store.finishRun(evaluationId, 'complete'); return { dir, artifact: final.artifact, calls: final.calls };
+    };
+    if (options.resumeId) {
+      const plan = store.run<{ baselineId: string; currentId: string; config: RunConfig; environment: ReturnType<typeof environment> }>(evaluationId);
+      if (plan.plan.baselineId !== baselineId || plan.plan.currentId !== currentId || hash(JSON.stringify(plan.plan.config)) !== hash(JSON.stringify(config))) throw new Error('Исходные условия оценки изменены');
+      if (plan.status === 'complete') return { dir, ...loadEvaluation(root, evaluationId) };
+      const final = store.finalization<{ artifact: EvaluationArtifact; calls: CallRecord[] }>(evaluationId); if (final) return finish(final);
+      if (plan.plan.environment.implementationHash !== environment().implementationHash) throw new Error('Код измерений изменён; resume оценки блокирован');
+      store.recover(evaluationId);
+    }
+    if (!options.resumeId) { mkdirSync(dir, { recursive: true }); mkdirSync(join(dir, 'responses')); writeFileSync(join(dir, 'calls.jsonl'), '', { flag: 'wx' }); }
     const runtime = mkdtempSync(join(tmpdir(), 'bench-judge-promptfoo-'));
     const executors: Partial<Record<'text' | 'vision', CallExecutor>> = {};
     let ledger: ReturnType<typeof apiLedger> | null = null;
@@ -73,12 +88,17 @@ export async function evaluateSaved(root: string, baselineId: string, currentId:
         return { kind, connection, diagnostic: await connection.diagnose() };
       }));
       const usable = diagnostics.filter((d) => d.connection && d.diagnostic?.status === 'ok' && (d.kind !== 'vision' || d.diagnostic.config.vision === true));
-      ledger = usable.length ? apiLedger(root, config, options.budgetUsd) : null;
-      for (const d of usable) executors[d.kind] = new CallExecutor(evaluationId, dir, config, d.connection!, d.diagnostic!, ledger, 'judge', currentId);
-      const pairs: JudgedPair[] = [], work = new Map<string, { task: Task; attemptId: string; prompt: string; images: ConnectionRequest['images'] }>();
+      const savedIntents = store.intents(evaluationId);
+      ledger = usable.length || savedIntents.length ? apiLedger(root, config, options.budgetUsd, store) : null;
+      if (!options.resumeId) store.createRun(evaluationId, { kind: 'evaluation', baselineId, currentId, config, budgetUsd: options.budgetUsd ?? null, environment: environment() });
+      for (const d of diagnostics.filter(d => usable.includes(d) || options.resumeId && d.connection && d.diagnostic && savedIntents.some(i => i.attemptId.includes(`-${d.kind}-`))))
+        executors[d.kind] = new CallExecutor(evaluationId, dir, config, d.connection!, d.diagnostic!, ledger, 'judge', currentId, { store, ...(options.fault ? { fault: options.fault } : {}), ...(options.log ? { log: options.log } : {}) });
+      type Work = { task: Task; attemptId: string; prompt: string; images: ConnectionRequest['images'] };
+      const prepared = store.assessment<{ pairs: JudgedPair[]; work: Array<[string, Work]> }>(evaluationId, 'judge-plan');
+      const pairs: JudgedPair[] = prepared?.pairs ?? [], work = new Map<string, Work>(prepared?.work ?? []);
       let selectedPairs = 0;
       const counts = new Map<string, number>();
-      for (const task of current.manifest.suite.tasks.filter((t) => t.readiness === 'enabled' && t.manualRequired)) {
+      if (!prepared) for (const task of current.manifest.suite.tasks.filter((t) => t.readiness === 'enabled' && t.manualRequired)) {
         for (const after of current.attempts.filter((a) => a.taskId === task.id)) {
           const before = baseline.attempts.find((a) => a.taskId === task.id && a.index === after.index);
           const kind = task.rubric.categories.includes('ui-design') ? 'vision' : 'text';
@@ -89,7 +109,7 @@ export async function evaluateSaved(root: string, baselineId: string, currentId:
             const pair: JudgedPair = { id, taskId: task.id, index: after.index, kind, rubricVersion: task.rubric.version,
               order: { A, B }, verdict: null, winner: null, status: 'pending', reason: 'Судья не настроен или недоступен', callIds: [], promptHash: '', artifacts: [] };
             pairs.push(pair);
-            if (!before || !comparison.evaluationCompatible || !comparison.shellCompatible || !comparison.conditionsCompatible
+            if (!before || !comparison.evaluationCompatible
               || comparison.excludedTaskIds.includes(task.id)) { pair.status = 'not_evaluated'; pair.reason = 'Несовместимые условия/задание/оценка'; continue; }
             if (!objectivePass(before, task) || !objectivePass(after, task)) { pair.status = 'not_evaluated'; pair.reason = 'Сначала объективные проверки: пара содержит провал/пропуск'; continue; }
             const answerA = finalAnswer(root, A === 'baseline' ? baseline : current, A === 'baseline' ? before : after);
@@ -100,30 +120,31 @@ export async function evaluateSaved(root: string, baselineId: string, currentId:
               ...images(root, B === 'baseline' ? baseline : current, B === 'baseline' ? before : after, 'B')] : [];
             if (visual && pairImages.length !== 4) { pair.reason = 'Для vision нужны четыре настоящих скриншота (A/B, 1440/390px)'; continue; }
             // Страница ручной калибровки содержит только A/B и источники, без названий моделей.
-            const review = `${id}-blind.html`;
-            const imageMarkup = visual ? pairImages.map((i) => `<p>${escapeHtml(i.label)}</p><img style="max-width:100%" src="${i.dataUrl}">`).join('') : `<h2>A</h2><pre>${escapeHtml(answerA)}</pre><h2>B</h2><pre>${escapeHtml(answerB)}</pre>`;
-            writeFileSync(join(dir, review), `<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; base-uri 'none'"><title>Слепая ручная проверка</title><style>body{box-sizing:border-box;font:16px Arial;max-width:1000px;margin:24px auto;padding:16px}pre{white-space:pre-wrap;overflow-wrap:anywhere}</style><h1>${escapeHtml(task.title)}</h1><pre>${escapeHtml(taskPrompt(task))}</pre><p>${escapeHtml(task.rubric.criteria.join('; '))}</p>${imageMarkup}`, { flag: 'wx' });
+            const review = `${id}-blind-${randomUUID().slice(0, 8)}.html`;
+            writeOnce(join(dir, review), blindReviewHtml(task, taskPrompt(task), answerA, answerB, pairImages));
             pair.artifacts.push(review);
             if (!executors[kind]) { pair.reason = diagnostics.find((d) => d.kind === kind)?.diagnostic?.reason || 'Нет подходящего text/vision судьи; pending'; continue; }
             const physicalCalls = 1 + Math.min(task.limits.maxRetries, config.limits.maxRetries);
             if ((counts.get(task.id) ?? 0) + physicalCalls > Math.min(task.limits.maxJudgeCalls, config.limits.maxJudgeCalls)
               || selectedPairs >= (options.limitPairs ?? Number.POSITIVE_INFINITY)) { pair.reason = 'Лимит вызовов судьи/выборки'; continue; }
             const prompt = blindPrompt(task, answerA, answerB, visual); pair.promptHash = hash(prompt);
-            const promptPath = `${id}-judge-request.json`; writeJson(join(dir, promptPath), { prompt, imageLabels: pairImages.map((i) => i.label), imageHashes: pairImages.map((i) => hash(i.dataUrl)) });
+            const promptPath = `${id}-judge-request-${randomUUID().slice(0, 8)}.json`; writeJson(join(dir, promptPath), { prompt, imageLabels: pairImages.map((i) => i.label), imageHashes: pairImages.map((i) => hash(i.dataUrl)) });
             pair.artifacts.push(promptPath); work.set(id, { task, attemptId: after.attemptId, prompt, images: pairImages });
             counts.set(task.id, (counts.get(task.id) ?? 0) + physicalCalls); selectedPairs++;
           }
         }
       }
+      if (!prepared) store.saveAssessment(evaluationId, 'judge-plan', { pairs, work: [...work] });
       let halted: Execution | null = null;
       const provider: ApiProvider = { id: () => 'practical-blind-judge', toJSON: () => ({ id: 'practical-blind-judge' }),
         callApi: async (_prompt: string, context?: CallApiContextParams, apiOptions?: CallApiOptionsParams): Promise<ProviderResponse> => {
           const key = String(context?.vars.pairId), pair = pairs.find((p) => p.id === key)!, item = work.get(key)!;
-          const executor = executors[pair.kind]!;
+          const executor = executors[pair.kind];
           const execution = halted ? { ...halted, callIds: [], output: null }
-            : await executor.execute(item.task, item.attemptId, pair.index, item.prompt, item.images, apiOptions?.abortSignal);
+            : executor ? await executor.execute(item.task, item.attemptId, pair.index, item.prompt, item.images, options.signal && apiOptions?.abortSignal ? AbortSignal.any([options.signal, apiOptions.abortSignal]) : options.signal ?? apiOptions?.abortSignal, pair.id)
+              : { status: diagnostics.find(d => d.kind === pair.kind)?.diagnostic?.status ?? 'auth_missing', reason: 'Судья недоступен при resume; запрос не отправлен', callIds: [], output: null };
           if (['quota_exhausted', 'auth_missing', 'auth_incompatible', 'model_unavailable', 'route_changed'].includes(execution.status)) halted = execution;
-          pair.callIds = execution.callIds; pair.reason = execution.reason;
+          pair.callIds = execution.callIds; pair.reason = execution.reason; pair.executionStatus = execution.status;
           const metadata = { ...execution, ...(execution.status === 'quota_exhausted' ? { rateLimitKind: 'quota' } : {}) };
           return execution.status === 'ok' ? { output: execution.output ?? '', metadata }
             : { error: `${execution.status}: ${execution.reason}`, metadata };
@@ -134,30 +155,29 @@ export async function evaluateSaved(root: string, baselineId: string, currentId:
           try { const verdict = verdictSchema.parse(JSON.parse(output)); pair.verdict = verdict.verdict; pair.reason = verdict.reason;
             pair.winner = verdict.verdict === 'A' || verdict.verdict === 'B' ? pair.order[verdict.verdict] : verdict.verdict;
             pair.status = verdict.verdict === 'insufficient_data' ? 'pending' : 'evaluated'; return { pass: true, score: 1, reason: verdict.reason };
-          } catch { pair.status = 'pending'; pair.reason = 'Судья вернул неверный формат вердикта'; return { pass: false, score: 0, reason: pair.reason }; }
+          } catch { pair.status = 'pending'; pair.executionStatus = 'invalid_response'; pair.reason = 'Судья вернул неверный формат вердикта'; return { pass: false, score: 0, reason: pair.reason }; }
         } }] }));
       if (tests.length) {
         const { evaluate } = await import('promptfoo');
         const evalResult = await evaluate({ prompts: ['{{taskPrompt}}'], providers: [provider], tests, sharing: false, writeLatestResults: false },
-          { cache: false, maxConcurrency: 1, showProgressBar: false, timeoutMs: config.limits.timeoutMs });
-        writeJson(join(dir, 'promptfoo.json'), redact(await evalResult.toEvaluateSummary()));
+          { cache: false, maxConcurrency: 1, showProgressBar: false, timeoutMs: config.limits.timeoutMs + 15000 });
+        await Promise.all(Object.values(executors).map(e => e.waitForIdle()));
+        const enginePath = existsSync(join(dir, 'promptfoo.json')) ? `promptfoo-resume-${randomUUID()}.json` : 'promptfoo.json';
+        writeJson(join(dir, enginePath), redact(await evalResult.toEvaluateSummary()));
       }
-      const calls = Object.values(executors).flatMap((e) => e.calls);
+      if (store.intents(evaluationId).some(c => ['planned','reserved','dispatched'].includes(c.state)) || options.signal?.aborted) throw new Error(`Оценка прервана. Resume ID: ${evaluationId}`);
+      const calls = [...new Map(Object.values(executors).flatMap(e => e.calls).map(c => [c.callId,c])).values()];
       const orderDisputes = [...new Set(pairs.filter((p) => p.status === 'evaluated' && pairs.some((other) => other.id !== p.id && other.taskId === p.taskId
         && other.index === p.index && other.status === 'evaluated' && other.winner !== p.winner)).map((p) => `${p.taskId}-a${p.index}`))];
       const artifact: EvaluationArtifact = { schemaVersion: 1, evaluationId, baselineRunId: baselineId, currentRunId: currentId,
         baselineIntegrityHash: hash(readFileSync(join(root, baselineId, 'integrity.json'))), currentIntegrityHash: hash(readFileSync(join(root, currentId, 'integrity.json'))),
         createdAt: new Date().toISOString(), judgeVersion: config.judges.version, pairs, orderDisputes, budget: ledger?.snapshot() ?? null, config: config.judges, environment: environment() };
-      writeJson(join(dir, 'evaluation.json'), artifact); writeJson(join(dir, 'summary.json'), summarizeCalls(calls, []));
-      writeFileSync(join(dir, 'report.html'), evaluationHtml(artifact, calls), { flag: 'wx' }); finalizeIntegrity(dir);
-      return { dir, artifact, calls };
-    } catch (error) { writeJson(join(dir, 'failure.json'), { reason: String(redact(String(error))), budget: ledger?.snapshot() ?? null }); throw error; }
-    finally { rmSync(runtime, { recursive: true, force: true }); }
+      const final = store.finalization<{ artifact: EvaluationArtifact; calls: CallRecord[] }>(evaluationId) ?? { artifact, calls };
+      if (!store.finalization(evaluationId)) store.saveFinalization(evaluationId, final); options.fault?.('finalizing');
+      return finish(final);
+    } catch (error) { writeJson(join(dir, `interruption-${randomUUID()}.json`), { reason: String(redact(String(error))), budget: ledger?.snapshot() ?? null }); throw error; }
+    finally { await Promise.all(Object.values(executors).map(e => e.waitForIdle())); rmSync(runtime, { recursive: true, force: true }); }
   }));
-}
-function evaluationHtml(data: EvaluationArtifact, calls: CallRecord[]): string {
-  const summary = summarizeCalls(calls, []);
-  return `<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'"><title>Слепое A/B</title><style>*{box-sizing:border-box}body{font:16px/1.5 Arial;margin:0;padding:24px;overflow-wrap:anywhere}.scroll{max-width:100%;overflow:auto}td,th{padding:10px;border:1px solid #ccc}table{border-collapse:collapse;min-width:680px;width:100%}pre{overflow-wrap:anywhere;white-space:pre-wrap}</style><h1>Слепое A/B и калибровка</h1><p>Версия судьи/рубрики ${escapeHtml(data.judgeVersion)}. Это относительное предпочтение, не абсолютный pass rate. Исходные запуски неизменны; незавершённые оценки pending. Споры порядка: ${escapeHtml(data.orderDisputes.join(', ') || 'нет')}.</p><p>Запросов судьи ${calls.length}; фактическое API списание ${summary.incurredCostUsd ?? 'неизвестно'} USD; оценка ${summary.costs.total.value ?? 'неизвестно'} USD.</p><div class="scroll"><table><tr><th>Пара</th><th>Статус</th><th>Вердикт / предпочтение</th><th>Обоснование</th><th>Артефакты</th></tr>${data.pairs.map((p) => `<tr><td>${escapeHtml(p.id)}</td><td>${p.status}</td><td>${p.verdict ?? 'pending'} / ${p.winner ?? 'pending'}</td><td>${escapeHtml(p.reason)}</td><td>${p.artifacts.map((a) => `<a href="${escapeHtml(a)}">${escapeHtml(a)}</a>`).join('<br>')}</td></tr>`).join('')}</table></div><p><a href="evaluation.json">evaluation.json</a> · <a href="calls.jsonl">calls.jsonl</a> · <a href="summary.json">summary.json</a> · <a href="integrity.json">integrity.json</a></p></html>`;
 }
 export function loadEvaluation(root: string, id: string): { artifact: EvaluationArtifact; calls: CallRecord[] } {
   if (!/^evaluation-[a-f0-9-]{36}$/.test(id)) throw new Error('Неверный ID оценки');
@@ -178,4 +198,19 @@ export function calibrate(root: string, evaluationId: string, raw: unknown): str
   const dir = join(root, 'calibrations', `calibration-${randomUUID()}`); mkdirSync(dir, { recursive: true });
   writeJson(join(dir, 'calibration.json'), { evaluationId, evaluationIntegrityHash: hash(readFileSync(join(root, 'evaluations', evaluationId, 'integrity.json'))),
     createdAt: new Date().toISOString(), reviewer: input.reviewer, reviews }); finalizeIntegrity(dir); return dir;
+}
+
+export function calibrationSample(root: string, evaluationId: string) {
+  const { artifact } = loadEvaluation(root, evaluationId);
+  const groups = [...new Set(artifact.pairs.filter(p => p.artifacts.some(a => a.includes('-blind-'))).map(p => `${p.taskId}-a${p.index}`))];
+  const shuffled = [...groups]; for (let i = shuffled.length - 1; i > 0; i--) { const j = randomInt(i + 1); [shuffled[i], shuffled[j]] = [shuffled[j]!, shuffled[i]!]; }
+  const chosen = new Set([...shuffled.slice(0, Math.ceil(groups.length * 0.1)), ...artifact.orderDisputes]);
+  const selected = artifact.pairs.filter(p => chosen.has(`${p.taskId}-a${p.index}`) && p.artifacts.some(a => a.includes('-blind-')));
+  const dir = join(root, 'calibrations', `sample-${randomUUID()}`); mkdirSync(dir, { recursive: true });
+  writeJson(join(dir, 'selection.json'), { evaluationId, evaluationIntegrityHash: hash(readFileSync(join(root, 'evaluations', evaluationId, 'integrity.json'))),
+    fraction: 0.1, independentPairs: groups.length, selectedPairs: chosen.size, orderDisputesIncluded: artifact.orderDisputes, pairIds: selected.map(p => p.id) });
+  // Шаблон не содержит автоматических вердиктов или моделей; null надо заменить человеком.
+  writeJson(join(dir, 'reviews-template.json'), { reviewer: '', reviews: selected.map(p => ({ pairId: p.id, verdict: null, reason: '' })) });
+  writeOnce(join(dir, 'review.html'), `<!doctype html><html lang="ru"><meta charset="utf-8"><title>Выборка ручной калибровки</title><h1>Слепая выборка: 10% и спорные пары</h1>${selected.map(p => `<p><a href="../../evaluations/${evaluationId}/${p.artifacts.find(a => a.includes('-blind-'))!}">${p.id}</a></p>`).join('')}<p>Заполните копию reviews-template.json. Автоматические вердикты здесь скрыты.</p></html>`);
+  finalizeIntegrity(dir); return dir;
 }

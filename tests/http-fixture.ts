@@ -3,14 +3,15 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { randomUUID } from 'node:crypto';
 
 export interface StubRequest { body: Record<string, unknown>; request: IncomingMessage; response: ServerResponse; }
-export async function httpFixture(handler: (request: StubRequest, count: number) => void | Promise<void>) {
+export async function httpFixture(handler: (request: StubRequest, count: number) => void | Promise<void>, options: { metadata?: unknown; generation?: (request: IncomingMessage, response: ServerResponse) => void } = {}) {
   const bodies: Record<string, unknown>[] = [];
   const server = createServer(async (request, response) => {
     if (request.method === 'GET' && request.url?.endsWith('/endpoints')) {
       response.setHeader('Content-Type', 'application/json');
-      response.end(JSON.stringify({ data: { architecture: { input_modalities: ['text', 'image'] }, endpoints: [{ tag: 'fixture/isolated', provider_name: 'Fixture', context_length: 8192,
+      response.end(JSON.stringify({ data: options.metadata ?? { architecture: { input_modalities: ['text', 'image'], output_modalities: ['text'] }, endpoints: [{ tag: 'fixture/isolated', provider_name: 'Fixture', context_length: 8192,
         max_prompt_tokens: 8192, max_completion_tokens: 8192, pricing: { prompt: '0.000001', completion: '0.000002', input_cache_read: '0.0000002', input_cache_write: '0.00000125', request: '0', image: '0' } }] } })); return;
     }
+    if (request.method === 'GET' && request.url?.startsWith('/api/v1/generation?') && options.generation) { options.generation(request, response); return; }
     if (request.method !== 'POST' || request.url !== '/api/v1/chat/completions') { response.statusCode = 404; response.end('{}'); return; }
     let text = ''; for await (const chunk of request) text += String(chunk);
     const body = JSON.parse(text) as Record<string, unknown>; bodies.push(body);

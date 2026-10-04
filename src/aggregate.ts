@@ -63,6 +63,8 @@ export function summarizeCalls(input: CallRecord[], attempts: AttemptRecord[]) {
     agentSteps: sumKnown(calls.map((c) => c.agentSteps ?? null)),
     accountingIncompleteCalls: calls.filter((c) => c.accountingIncomplete).length,
     callElapsedMs: calls.reduce((sum, c) => sum + c.elapsedMs, 0),
+    generationElapsedMs: sumKnown(calls.map(c => c.generationElapsedMs === undefined ? c.elapsedMs : c.generationElapsedMs)),
+    checksElapsedMs: sumKnown(attempts.map(a => a.checksElapsedMs ?? null)),
     successfulAttempts,
     costPerSuccessUsd: successfulAttempts === 0 || costs.total.value === null ? null : roundUsd(costs.total.value / successfulAttempts),
     judgeIncludedInCostPerSuccess: true,

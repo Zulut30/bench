@@ -1,0 +1,76 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, basename } from 'node:path';
+import { loadConfig, connectionSchema } from '../src/connections/config.js';
+import { createConnection } from '../src/connections/index.js';
+import { runPilot } from '../src/pilot.js';
+import { compareRuns, saveComparison } from '../src/compare.js';
+import { calibrationSample, evaluateSaved } from '../src/judges.js';
+import { exportRun, rerunSuspected } from '../src/daily.js';
+import { projectRoot, measurementHash } from '../src/runner.js';
+import { hash, readJson, loadRun, withProjectLock } from '../src/storage.js';
+import { fakeCli } from './fake-cli.js';
+import { answer, httpFixture } from './http-fixture.js';
+const roots: string[] = [];
+const temp = () => { const p = mkdtempSync(join(tmpdir(), 'bench-daily-test-')); roots.push(p); return p; };
+afterEach(() => { vi.unstubAllEnvs(); roots.splice(0).forEach(p => rmSync(p, { recursive: true, force: true })); });
+describe('Ежедневные операции и совместимость', () => {
+  it('оформление/CLI не меняет fingerprint измерений; checker и материалы меняют', () => {
+    const root = temp(); for (const d of ['src', 'fixtures', 'sandbox']) mkdirSync(join(root,d));
+    for (const [p,c] of [['src/report.ts','style1'],['src/cli.ts','presentation'],['src/checks.ts','checker'],['fixtures/source.json','fixed']]) writeFileSync(join(root,p!),c!);
+    const initial = measurementHash(root); writeFileSync(join(root,'src/report.ts'),'style2'); writeFileSync(join(root,'src/cli.ts'),'new output'); expect(measurementHash(root)).toBe(initial);
+    writeFileSync(join(root,'fixtures/source.json'),'changed'); expect(measurementHash(root)).not.toBe(initial);
+  });
+  it('слепое A/B между Codex, Claude и другим endpoint: общие рубрики допускаются, регрессия блокируется', async () => {
+    vi.stubEnv('OPENROUTER_API_KEY','cross-client-fixture-key');
+    const dir = temp(), root = join(dir,'results'); mkdirSync(root);
+    const config = loadConfig(join(projectRoot,'configs/pilot-mock.json')); config.profile='standard'; config.taskIds=['v1-writing']; config.limits.maxRetries=0;
+    const examples = readJson(join(projectRoot,'fixtures/standard-examples.json')) as Record<string,{correctAlternatives:string[]}>;
+    const outputs = examples['v1-writing']!.correctAlternatives;
+    const codex = fakeCli(dir,'codex-cli','cross',join(projectRoot,'fixtures/standard-examples.json'),outputs[0]);
+    const claude = fakeCli(dir,'claude-code','cross',join(projectRoot,'fixtures/standard-examples.json'),outputs[1]);
+    config.candidate=connectionSchema.parse({provider:'codex-cli',model:'other-model-v1',executable:codex.executable,clientHome:codex.clientHome});
+    const baseline=(await runPilot(config,{resultsDir:root})).run;
+    config.candidate=connectionSchema.parse({provider:'claude-code',model:'pinned-v1',executable:claude.executable,clientHome:claude.clientHome,subscription:{paidOverage:'disabled'}});
+    const current=(await runPilot(config,{resultsDir:root})).run;
+    expect(baseline.attempts[0]!.status).toBe('pending'); expect(current.attempts[0]!.status).toBe('pending');
+    const comparison=compareRuns(baseline,current); expect(comparison).toMatchObject({comparisonKind:'systems',matchingTaskCount:1,pairedAttemptCount:1,regressionEligible:false});
+    expect(comparison.systemConditions.baseline).not.toEqual(comparison.systemConditions.current);
+    const stub=await httpFixture(({body,response})=>answer(response,body,JSON.stringify({verdict:'A',reason:'Проверены фиксированные источники'})));
+    try {
+      const judges=structuredClone(config); judges.judges.text=connectionSchema.parse({provider:'openrouter',model:'vendor/judge-v1',providerEndpoint:'fixture/isolated'});
+      const before=[baseline,current].map(r=>hash(readFileSync(join(root,r.manifest.runId,'integrity.json'))));
+      const evaluation=await evaluateSaved(root,baseline.manifest.runId,current.manifest.runId,judges,{budgetUsd:0.1,apiBaseUrl:stub.baseUrl,swapOrder:true});
+      expect(evaluation.calls).toHaveLength(2); expect(evaluation.artifact.pairs.every(p=>p.status==='evaluated')).toBe(true);
+      expect(evaluation.artifact.pairs[0]!.order.A).toBe(evaluation.artifact.pairs[1]!.order.B);
+      expect(evaluation.artifact.orderDisputes).toEqual(['v1-writing-a1']);
+      for(const body of stub.bodies) for(const label of ['other-model-v1','pinned-v1',baseline.manifest.runId,current.manifest.runId]) expect(JSON.stringify(body.messages)).not.toContain(label);
+      const sample=calibrationSample(root,evaluation.artifact.evaluationId);
+      expect(readJson(join(sample,'reviews-template.json'))).toMatchObject({reviewer:'',reviews:[{verdict:null},{verdict:null}]});
+      expect(readFileSync(join(sample,'review.html'),'utf8')).not.toContain('pinned-v1');
+      expect([baseline,current].map(r=>hash(readFileSync(join(root,r.manifest.runId,'integrity.json'))))).toEqual(before);
+      const api=structuredClone(config); api.candidate=connectionSchema.parse({provider:'openrouter',model:'different-api-model',providerEndpoint:'different-endpoint'});
+      const mutated=structuredClone(current); mutated.manifest.config=api; mutated.manifest.conditions!.provider='openrouter';
+      expect(compareRuns(baseline,mutated)).toMatchObject({matchingTaskCount:1,regressionEligible:false});
+    }finally{await stub.close();}
+  });
+  it('suspected ведёт к свежим попыткам нужного задания; export и resume не меняют исходную историю', async () => {
+    const dir=temp(),root=join(dir,'results'),config=loadConfig(join(projectRoot,'configs/pilot-mock.json'));
+    config.profile='standard'; config.taskIds=['v1-instruction-following']; config.limits.maxRetries=0;
+    const baseline=(await runPilot(config,{resultsDir:root})).run;
+    const connection=createConnection(config.candidate,[projectRoot]); const execute=connection.execute.bind(connection);
+    connection.execute=async request=>({...await execute(request),output:'{"ids":[],"sum":0}'});
+    const current=(await runPilot(config,{resultsDir:root,connection})).run;
+    const comparison=await withProjectLock(root,async()=>saveComparison(root,baseline.manifest.runId,current.manifest.runId));
+    expect(comparison.comparison.regression).toMatchObject({eligible:true,suspectedTaskIds:['v1-instruction-following']});
+    const before=hash(readFileSync(join(root,current.manifest.runId,'integrity.json')));
+    const rerun=await rerunSuspected(root,basename(comparison.dir));
+    expect(rerun.independentTaskCount).toBe(1);expect(rerun.run.calls).toHaveLength(3);expect(rerun.run.attempts.every(a=>a.status==='passed')).toBe(true);
+    expect(rerun.run.manifest.runId).not.toBe(current.manifest.runId);expect(rerun.run.calls.every(c=>c.delivery==='fresh')).toBe(true);
+    const output=join(dir,'export');const report=exportRun(root,current.manifest.runId,output);expect(report).toBe(join(output,current.manifest.runId,'report.html'));
+    expect(loadRun(output,current.manifest.runId).attempts).toEqual(current.attempts);
+    expect(()=>exportRun(root,current.manifest.runId,output)).toThrow('новую');
+    await runPilot(config,{resultsDir:root,resumeId:current.manifest.runId});expect(hash(readFileSync(join(root,current.manifest.runId,'integrity.json')))).toBe(before);
+  });
+});

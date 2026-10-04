@@ -17,6 +17,42 @@ const request: ConnectionRequest = { prompt: 'Задание', taskId: 'paginati
   maxOutputTokens: 256, maxAgentTurns: 1, temperature: 0, reasoning: 'none', images: [] };
 afterEach(() => vi.unstubAllEnvs());
 describe('OpenRouter — только локальная HTTP заглушка', () => {
+  it('literal Llama3 использует границу конкретного UTF-8 запроса; cache, fees, output/reasoning и retries входят в резерв', async () => {
+    vi.stubEnv('OPENROUTER_API_KEY', 'fixture-secret-not-real-key');
+    const stub = await httpFixture(({ body, response }) => answer(response, body, 'Привет', { choices: [{ text: 'Привет' }] }), { metadata: {
+      architecture: { tokenizer: 'Llama3', input_modalities: ['text', 'image'], output_modalities: ['text'] }, endpoints: [{ tag: 'fixture/isolated', provider_name: 'Fixture', context_length: 8192,
+        max_prompt_tokens: 7000, max_completion_tokens: 2048, pricing: { prompt: '0.000001', completion: '0.000002', input_cache_read: '0.0000002', input_cache_write: '0.000003', request: '0.002', image: '0.01' } }] } });
+    try {
+      const connection = new OpenRouterConnection(connectionSchema.parse({ ...settings, model: 'meta-llama/llama-3.1-8b-instruct', promptTransport: 'raw-llama3' }), stub.baseUrl);
+      expect((await connection.diagnose()).status).toBe('ok');
+      const concrete = connection.upperBound(256, 0, request)!;
+      expect(concrete).toMatchObject({ method: 'raw-byte-bpe', feesUsd: 0.002, outputTokens: 256 }); expect(concrete.inputTokens).toBeLessThan(200);
+      const result = await connection.execute(request); expect(result.status).toBe('ok');
+      expect(concrete.inputTokens).toBe(Buffer.byteLength(String(stub.bodies[0]!.prompt)) + 2);
+      expect(concrete.perCallUsd).toBeCloseTo(concrete.inputTokens! * 0.000003 + 256 * 0.000002 + 0.002, 10);
+      expect(result.estimatedCostUsd).toBe(0.002164); expect(stub.bodies[0]).not.toHaveProperty('messages');
+      const vision = connection.upperBound(256, 2, { ...request, images: [{ label: 'A', dataUrl: 'data:image/png;base64,YQ==' }, { label: 'B', dataUrl: 'data:image/png;base64,Yg==' }] })!;
+      expect(vision).toMatchObject({ method: 'endpoint-context', inputTokens: 7000, feesUsd: 0.022 });
+      expect(vision.perCallUsd).toBeCloseTo(7000 * 0.000003 + 256 * 0.000002 + 0.022, 10);
+      expect(connection.upperBound(8192, 0, request)).toBeNull(); expect(connection.upperBound(256, 0, { ...request, prompt: 'x'.repeat(8192) })).toBeNull();
+      const noFunds = new BudgetLedger({ perRequestUsd: 1, perTaskUsd: 1, runUsd: concrete.perCallUsd * 1.5, monthUsd: 1 }, 'UTC', undefined, undefined, 'api');
+      expect(noFunds.reserve('run', 'task', { ...concrete, attemptUsd: concrete.perCallUsd * 2 }, new Date())).toMatchObject({ allowed: false, details: { nextUsd: expect.any(Number), spentUsd: 0, reservedUsd: 0 } });
+    } finally { await stub.close(); }
+  });
+  it('сохраняет generation ID даже при недопустимом usage; неизвестное начисление не превращает в ноль', async () => {
+    vi.stubEnv('OPENROUTER_API_KEY', 'fixture-secret-not-real-key');
+    const stub = await httpFixture(({ body, response }) => answer(response, body, 'ok', { id: 'gen-invalid-usage', usage: { prompt_tokens: -1, cost: 'bad' } }));
+    try {
+      const connection = new OpenRouterConnection(settings, stub.baseUrl); await connection.diagnose(); let id = '';
+      const result = await connection.execute({ ...request, onGenerationId: value => { id = value; } });
+      expect(result.status).toBe('invalid_response'); expect(id).toBe('gen-invalid-usage'); expect(result.incurredCostUsd).toBeNull();
+    } finally { await stub.close(); }
+  });
+  it.each([undefined, ['image'], ['text','audio']])('не отправляет генерацию с неизвестной границей выходных модальностей: %j', async outputs => {
+    vi.stubEnv('OPENROUTER_API_KEY','fixture-secret-not-real-key');
+    const stub=await httpFixture(({body,response})=>answer(response,body,'must not happen'),{metadata:{architecture:{input_modalities:['text'],output_modalities:outputs},endpoints:[{tag:'fixture/isolated',provider_name:'Fixture',context_length:8192,pricing:{prompt:0.000001,completion:0.000002,image:0.01}}]}});
+    try{const connection=new OpenRouterConnection(settings,stub.baseUrl);expect((await connection.diagnose()).status).toBe('model_unavailable');expect((await connection.execute(request)).sent).toBe(false);expect(stub.bodies).toHaveLength(0);}finally{await stub.close();}
+  });
   it.each(['success', 'no-usage', 'auth', 'quota', 'bad-json', 'bad-shape', 'timeout', 'route'] as const)('%s', async (scenario) => {
     vi.stubEnv('OPENROUTER_API_KEY', 'fixture-secret-not-real-key');
     const stub = await httpFixture(({ response, body }) => {

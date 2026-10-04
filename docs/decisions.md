@@ -149,3 +149,62 @@
 [configuration](https://geminicli.com/docs/reference/configuration/).
 Context7 использован для promptfoo, OpenRouter и Gemini; flags проверены локальным help,
 Gemini cumulative stats дополнительно сверены с официальным исходником uiTelemetry.
+
+## Решения основы v1 · 04.10.2026
+
+Предыдущие разделы описывают этапы на дату их разработки. Текущие отличия:
+
+1. **16 проверенных задач.** Standard имеет одно primary на категорию; smoke — 6.
+   fixture alternatives — данные для тестов/mock, не подсказка модели. Генерация
+   выполняется promptfoo, проверки включены JavaScript assertions. Число попыток
+   меняет план, но не идентичность самого задания при compare.
+2. **Контейнер исполнения.** Node и Playwright закреплены multiarch digest, зависимости
+   установлены по отдельному lockfile. Никаких host volumes, Docker socket, auth/env,
+   внешней сети; read-only root, tmpfs candidate/tmp, caps-none у UID 10001, cgroups.
+   Доверенный root checker имеет минимальные capabilities для смены UID/убийства
+   процессов; /opt/checker недоступен кандидату. Public execute helper не содержит
+   скрытых ожидаемых результатов. Файлы проходят allowlist/size проверку дважды.
+   Процесс checker имеет собственный deadline на случай SIGKILL host-процесса.
+3. **Durable states/budget.** SQLite WAL + synchronous FULL и BEGIN IMMEDIATE.
+   Reserve+reserved и charge+completed/failed/in_doubt атомарны. Обёртка бюджета
+   перечитывает state в транзакции, поэтому параллельные процессы видят резервы.
+   Resume повторно проверяет текущую цену; резерв другого месяца запрещает dispatch.
+   Lease PID/token защищает один results-dir; после смерти PID его можно занять.
+   JSON-журнал переносится идемпотентно, старый файл/хеш сохраняются.
+4. **Неоднозначный исход.** Dispatched никогда не переотправляется автоматически.
+   Generation ID сохраняется сразу после декодирования JSON, до валидации usage.
+   GET /generation хранит отдельный receipt и обновляет бюджет; неизвестное держит
+   резерв. Файлы истории не редактируются. Повреждённый хвост in-progress JSONL
+   восстанавливается из SQLite с сохранением исходных байтов для аудита.
+5. **Время и watchdog.** Транспорт сам ограничивает generation timeout. Watchdog
+   promptfoo имеет запас для отмены/записи и проверки кода. Перед закрытием SQLite
+   ожидаем завершение in-flight executor: тест короткого timeout обнаружил гонку
+   между Promise.race движка и settlement. Генерация/check отдельно; unknown — null.
+6. **Доказуемые bounds.** Byte-BPE bound полного literal Llama3 prompt + BOS/EOS
+   реализован и проверен на loopback-контракте. Документация OpenRouter допускает
+   `prompt`, но не гарантирует framing каждого upstream; metadata.tokenizer недостаточно.
+   Реальный транспорт использует context fallback до подтверждения точного протокола.
+   Нельзя искусственно уменьшать paid reserve эвристикой. Cache учитывается по max
+   ставке, output уже включает reasoning, request/image fees и retries отдельно.
+   Compression отключён явно; неизвестные платные инструменты и image/audio output
+   блокируются, чтобы выходные нетокенные начисления не обходили верхний резерв.
+7. **A/B vs monitoring.** Содержание общего задания/материалов/рубрики достаточно
+   для слепой пары разных моделей, endpoints и CLI. Клиент/платформа/tools/параметры/
+   actual route нужны для strict regression. Стили report.ts/вывод cli.ts исключены
+   из measurement hash; исходники проверок/материалы/контейнер остаются в нём.
+   Lockfile и actual image ID учитываются в strict compatibility.
+8. **Калибровка/проверка сигнала.** Автоматический вердикт не становится абсолютным
+   качеством. Random A/B + swap-order, отдельные immutable assessments. 10% уникальных
+   task/attempt пар и все споры отбираются для слепой ручной проверки. Явный rerun
+   делает новые ответы затронутых задач, хранит попытки/разброс, результат — suspected.
+9. **Чистая установка/CI.** Actions закреплены commit SHA, Node/пакеты/образы проверены
+   через официальные реестры. Все внешние генерации в разработке/CI заменены fixtures.
+   3 upstream advisories остаются видимыми; basic-ftp 6.2.1 — подтверждённый override.
+
+Проверены Context7 `/openrouterteam/docs` и текущие официальные
+[request/response schema](https://openrouter.ai/docs/api_reference/overview),
+[endpoint schema](https://openrouter.ai/docs/api/api-reference/endpoints/list-all-endpoints-for-a-model),
+[message transforms](https://openrouter.ai/docs/guides/features/message-transforms),
+[generation GET](https://openrouter.ai/docs/api/api-reference/generations/get-generation).
+Публичная документация не доказывает отсутствие дополнительной сериализации upstream;
+поэтому это отражено в dry-run и readiness, а не скрыто константой overhead.

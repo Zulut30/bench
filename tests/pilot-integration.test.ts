@@ -15,6 +15,7 @@ import { filesUnder, hash, loadRun, readJson } from '../src/storage.js';
 import type { SavedRun } from '../src/types.js';
 import { responsesSchema } from '../src/mock-provider.js';
 import { answer, httpFixture } from './http-fixture.js';
+import { readBudget } from '../src/state.js';
 
 const config = loadConfig(join(projectRoot, 'configs/pilot-openrouter.json'));
 config.candidate = connectionSchema.parse({ provider: 'openrouter', model: 'vendor/pilot-v1', providerEndpoint: 'fixture/isolated' });
@@ -58,11 +59,25 @@ describe('Pilot, immutable judge evaluations, manual import and compare', () => 
     expect(compareRuns(baseline, current)).toMatchObject({ pairedAttemptCount: 5, regressionEligible: true, conditionsCompatible: true, routeChanged: false });
   });
   it('dry-run показывает цену, readonly reservations и не отправляет генераций', async () => {
-    const posts = stub.bodies.length, journal = readFileSync(join(root, '.api-budget.json'), 'utf8');
+    const posts = stub.bodies.length, journal = JSON.stringify(readBudget(root));
     const plan = await dryRun(config, { resultsDir: root, apiBaseUrl: stub.baseUrl, budgetUsd: 0.1 });
     expect(plan).toMatchObject({ noGenerations: true, journalModified: false, budgetSufficient: true });
     expect(plan.requests).toHaveLength(5); expect(plan.upperCostUsd).toBeGreaterThan(0.05);
-    expect(stub.bodies).toHaveLength(posts); expect(readFileSync(join(root, '.api-budget.json'), 'utf8')).toBe(journal);
+    expect(stub.bodies).toHaveLength(posts); expect(JSON.stringify(readBudget(root))).toBe(journal);
+  });
+  it('авария судьи после dispatched восстанавливает тот же слепой порядок без повторной генерации', async () => {
+    const judges=structuredClone(config);judges.judges.text=connectionSchema.parse({provider:'openrouter',model:'vendor/judge-text-v1',providerEndpoint:'fixture/isolated'});
+    const before=new Set(existsSync(join(root,'evaluations')) ? (await import('node:fs')).readdirSync(join(root,'evaluations')) : []),posts=stub.bodies.length;
+    await expect(evaluateSaved(root,baseline.manifest.runId,current.manifest.runId,judges,{budgetUsd:0.1,apiBaseUrl:stub.baseUrl,limitPairs:1,
+      fault:point=>{if(point==='dispatched')throw Error('judge crash fixture');}})).rejects.toThrow('Resume ID');
+    const id=(await import('node:fs')).readdirSync(join(root,'evaluations')).find(p=>!before.has(p))!;
+    const {StateStore}=await import('../src/state.js'),store=new StateStore(root);
+    const prepared=store.assessment<{pairs:Array<{id:string;order:unknown}>}>(id,'judge-plan')!;const order=prepared.pairs.map(p=>({id:p.id,order:p.order}));store.close();
+    const resumed=await evaluateSaved(root,baseline.manifest.runId,current.manifest.runId,judges,{budgetUsd:0.1,apiBaseUrl:stub.baseUrl,resumeId:id});
+    expect(stub.bodies).toHaveLength(posts);expect(resumed.calls).toHaveLength(1);expect(resumed.calls[0]!.incurredCostUsd).toBeNull();
+    expect(resumed.artifact.pairs.map(p=>({id:p.id,order:p.order}))).toEqual(order);
+    expect(resumed.artifact.pairs.some(p=>p.executionStatus==='in_doubt')).toBe(true);
+    expect(resumed.artifact.budget).toMatchObject({runs:{[id]:{spentMicroUsd:0,reservedMicroUsd:expect.any(Number)}}});
   });
   it('требует явный бюджет, отказывает до POST и сохраняет пропуски без провала качества', async () => {
     const posts = stub.bodies.length;
@@ -82,7 +97,7 @@ describe('Pilot, immutable judge evaluations, manual import and compare', () => 
       const comparison = compareRuns(baseline, changed); expect(comparison.regressionEligible).toBe(false);
       expect(comparison.tasks.every((t) => t.status !== 'suspected')).toBe(true);
       if (kind === 'endpoint' || kind === 'actual-provider') expect(comparison.routeChanged).toBe(true);
-      else expect(comparison.pairedAttemptCount).toBe(0);
+      expect(comparison.pairedAttemptCount).toBe(5);
     }
   });
   it('без подходящего судьи pending, ручная слепая калибровка отдельная и неизменяемая', async () => {

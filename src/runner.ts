@@ -33,8 +33,12 @@ export function environment(): Manifest['environment'] {
   try { commit = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: projectRoot, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim(); } catch { /* Новый проект может быть без Git. */ }
   return { node: process.version, platform: process.platform, arch: process.arch, commit,
     dependencies: { ...packageJson.dependencies, ...packageJson.devDependencies }, lockfileHash: hash(readFileSync(join(projectRoot, 'package-lock.json'))),
-    implementationHash: hash([...filesUnder(join(projectRoot, 'src')).filter((p) => p.endsWith('.ts')).map((p) => `${p}:${hash(readFileSync(join(projectRoot, 'src', p)))}`),
-      `fixtures:${hash(readFileSync(join(projectRoot, 'fixtures/mock-responses.json')))}`].join('\n')) };
+    implementationHash: measurementHash(projectRoot) };
+}
+export function measurementHash(root: string) {
+  const paths = ['src', 'fixtures', 'sandbox'].flatMap(dir => existsSync(join(root, dir)) ? filesUnder(join(root, dir))
+    .filter(p => !p.startsWith('node_modules/') && !['report.ts', 'cli.ts'].includes(p)).map(p => `${dir}/${p}`) : []);
+  return hash(paths.map(p => `${p}:${hash(readFileSync(join(root, p)))}`).join('\n'));
 }
 
 export function prepareOfflineRuntime(dir: string): void {
