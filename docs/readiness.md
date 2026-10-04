@@ -1,9 +1,18 @@
 # Готовность v1
 
-Дата проверки: 04.10.2026. Локальные проверки: clean npm ci, typecheck, полный
-Vitest, demo/compare/export/resume, standard 16 × 2 (22 passed / 10 pending), smoke 6. Реальные генерации моделей не выполнялись, API и
+Дата проверки: 04.10.2026. Локальные проверки: clean npm ci, typecheck, Vitest
+**20 файлов / 174 теста**, demo/compare/export/resume, standard 16 × 2
+(22 passed / 10 pending), smoke 6. Реальные генерации моделей не выполнялись, API и
 подписочные квоты при разработке не расходовались. Проверка реального контейнера/
 браузера не является проверкой платного провайдера.
+
+Исходный код коммита `6140238083efd40de05fe55d4d3df104a297c834` проверен на
+macOS arm64 и Ubuntu 24.04 amd64. [GitHub Actions](https://github.com/Zulut30/bench/actions/runs/37193608656)
+завершился **success**: clean npm ci, сборка образа, typecheck, те же 174 теста,
+mock-smoke и загрузка JSON/HTML/PNG. В артефакте CI сохранён запуск
+`2026-10-04t09-57-32-751z-pilot-c3c175cb`. Локальный standard
+`2026-10-04t09-54-14-902z-pilot-4968e1cf` хранит этот commit в manifest,
+32 уникальных вызова, 22 passed / 10 pending и incurredCostUsd = 0.
 
 ## Подтверждённая граница
 
@@ -60,8 +69,9 @@ Vitest, demo/compare/export/resume, standard 16 × 2 (22 passed / 10 pending), s
 5. Одна рабочая станция / один results-dir; distributed leasing, сетевые SQLite,
    долгосрочное расписание, панель и публикация отсутствуют. PID lease консервативен
    при reuse PID. Статистическая уверенность и причинность изменений не вычисляются.
-6. Проверено на macOS arm64 + Colima. GitHub Actions проверяет Linux amd64; его результат
-   следует смотреть для конкретного commit. Windows/WSL/rootless Docker отдельно не проверены.
+6. Проверено на macOS arm64 + Colima и Linux amd64 в CI указанного выше commit.
+   Результаты последующих изменений следует смотреть для их конкретного commit.
+   Windows/WSL/rootless Docker отдельно не проверены.
 7. npm audit после чистой установки: **3 high** из одной транзитивной цепочки
    node-forge 1.4.0 → jks-js → promptfoo 0.123.1. Advisory
    [GHSA-86w9-cpqp-85rv](https://github.com/advisories/GHSA-86w9-cpqp-85rv)
