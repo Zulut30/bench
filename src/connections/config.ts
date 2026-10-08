@@ -29,10 +29,10 @@ export const runConfigSchema = z.strictObject({
     .default({ image: 'practical-bench-sandbox:1', dockerContext: null }),
   judges: z.strictObject({ text: connectionSchema.nullable(), vision: connectionSchema.nullable(), version: z.string().min(1) }),
   apiBudget: z.strictObject({ perRequestUsd: usd, perTaskUsd: usd, runUsd: usd, monthUsd: usd }),
-  generation: z.strictObject({ temperature: z.number().min(0).max(2), reasoning: z.enum(['none', 'low', 'medium', 'high']) }),
-  limits: z.strictObject({ attempts: z.number().int().min(1).max(10), timeoutMs: z.number().int().min(100).max(60_000),
+  generation: z.strictObject({ temperature: z.number().min(0).max(2), reasoning: z.enum(['none', 'low', 'medium', 'high', 'xhigh']) }),
+  limits: z.strictObject({ attempts: z.number().int().min(1).max(10), timeoutMs: z.number().int().min(100).max(300_000),
     maxAgentTurns: z.number().int().min(1).max(10), maxRetries: z.number().int().min(0).max(2),
-    maxOutputTokens: z.number().int().min(32).max(8192), maxJudgeCalls: z.number().int().min(0).max(2),
+    maxOutputTokens: z.number().int().min(32).max(32768), maxJudgeCalls: z.number().int().min(0).max(2),
   }),
 }).superRefine((config, ctx) => {
   for (const judge of [config.judges.text, config.judges.vision]) if (judge && judge.provider !== 'openrouter') {

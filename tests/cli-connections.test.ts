@@ -13,6 +13,19 @@ import { task } from './helpers.js';
 
 afterEach(() => vi.unstubAllEnvs());
 describe('Официальные CLI — тестируются только fake executable', () => {
+  it('Codex передаёт xhigh без понижения и сохраняет запрошенные и применённые настройки', async () => {
+    const temp = mkdtempSync(join(tmpdir(), 'bench-fake-xhigh-'));
+    try {
+      const fake = fakeCli(temp, 'codex-cli', 'success', join(projectRoot, 'package.json'));
+      const connection = new CliConnection(connectionSchema.parse({ provider: 'codex-cli', model: 'pinned-v1', executable: fake.executable, clientHome: fake.clientHome }), [projectRoot]);
+      const diagnostic = await connection.diagnose(); expect(diagnostic.status).toBe('ok');
+      const c = loadConfig(join(projectRoot, 'configs/pilot-codex-cli.json')); c.generation.reasoning = 'xhigh';
+      const { dir } = createRunDir(temp, 'calls'), executor = new CallExecutor('run', dir, c, connection, diagnostic, null);
+      expect((await executor.execute(task(), 'pagination-a1', 1, 'prompt')).status).toBe('ok');
+      expect(readJsonl<{ args: string[] }>(fake.record)[0]!.args).toContain('model_reasoning_effort="xhigh"');
+      expect(executor.calls[0]!.generationParameters).toMatchObject({ requested: { reasoning: 'xhigh' }, applied: { reasoning: 'xhigh' } });
+    } finally { rmSync(temp, { recursive: true, force: true }); }
+  });
   it('локальный npm bin не подменяет официальный клиент внутри защищённого проекта', () => {
     const temp = mkdtempSync(join(tmpdir(), 'bench-client-path-'));
     try {

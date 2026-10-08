@@ -38,7 +38,7 @@ export const taskSchema = z.strictObject({
   limits: z.strictObject({
     maxInputTokens: z.number().int().positive(),
     maxOutputTokens: z.number().int().positive(),
-    timeoutMs: z.number().int().positive().max(60_000),
+    timeoutMs: z.number().int().positive().max(300_000),
     maxCalls: z.number().int().positive(),
     maxRetries: z.number().int().min(0).max(2),
     maxSteps: z.number().int().positive(),

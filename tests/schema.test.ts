@@ -7,8 +7,19 @@ import { readJson } from '../src/storage.js';
 import { projectRoot } from '../src/runner.js';
 import { join } from 'node:path';
 import { config, suite, task } from './helpers.js';
+import { loadConfig, runConfigSchema } from '../src/connections/config.js';
 
 describe('Схема и готовность демонстрационного набора', () => {
+  it('принимает xhigh и явные длительные лимиты, сохраняя предел проверки кода', () => {
+    const c = loadConfig(join(projectRoot, 'configs/pilot-codex-cli.json'));
+    c.generation.reasoning = 'xhigh'; c.limits.timeoutMs = 180_000; c.limits.maxOutputTokens = 32768;
+    expect(runConfigSchema.parse(c).generation.reasoning).toBe('xhigh');
+    expect(runConfigSchema.safeParse({ ...c, limits: { ...c.limits, timeoutMs: 300_001 } }).success).toBe(false);
+    expect(runConfigSchema.safeParse({ ...c, limits: { ...c.limits, maxOutputTokens: 32769 } }).success).toBe(false);
+    const t = task(); t.limits.timeoutMs = 180_000;
+    expect(taskSchema.parse(t).limits.timeoutMs).toBe(180_000);
+    expect(taskSchema.safeParse({ ...t, execution: { kind: 'backend', allowedFiles: ['server.js'], timeoutMs: 60_001 } }).success).toBe(false);
+  });
   it('содержит 16 направлений, 10 уникальных задач и пять primary категорий', () => {
     expect(Object.keys(categories)).toEqual([...categoryIds]);
     expect(suiteSchema.parse(suite).tasks).toHaveLength(10);

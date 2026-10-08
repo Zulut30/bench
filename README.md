@@ -160,6 +160,13 @@ Codex/Gemini маркируются **agent**, Claude без tools и OpenRouter
 Температура CLI неизвестна; Codex/Claude reasoning=none применяется как low.
 Codex/Gemini output cap наблюдаемый, жёсткая гарантия провайдера не заявляется.
 
+`generation.reasoning` принимает `xhigh`; Codex получает его без понижения.
+Для длительного reasoning конфиг допускает до 300 000 ms ожидания и 32 768 выходных
+токенов, включая reasoning. Фактический предел — минимум лимита задания и конфига.
+Исходный standard сохраняет свои короткие лимиты; для другого режима создавайте
+отдельную версию набора с явными лимитами и одинаковыми условиями для всех моделей.
+Предел выполнения полученного кода остаётся 60 000 ms.
+
 ```bash
 npm run bench -- diagnose --provider codex-cli --model "$CODEX_MODEL_ID"
 npm run bench -- dry-run --provider codex-cli --model "$CODEX_MODEL_ID" --tasks v1-writing --attempts 1
