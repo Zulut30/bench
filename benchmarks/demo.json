@@ -1,7 +1,7 @@
 {
   "id": "practical-demo",
   "version": "1.0.0",
-  "evaluationVersion": "demo-checks-2",
+  "evaluationVersion": "demo-checks-3",
   "tasks": [
     {
       "id": "contact-form",

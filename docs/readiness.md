@@ -1,5 +1,12 @@
 # Готовность v1
 
+Дополнение 08.10.2026: по явному запросу пользователя выполнены 64 подписочные
+попытки Codex CLI 0.161.0 с `xhigh`: GPT-6.1 Sol, GPT-6 Astra, GPT-6 Sol и GPT-6 Luna,
+16 заданий на модель. Сохранены 63 ответа, один timeout; шесть ответов превысили
+входной лимит и не оцениваются как провалы качества. Платные API/судьи не вызывались.
+Обнаружены излишне строгие проверки; сохранённые ответы перепроверяются отдельно,
+без изменения истории. [Протокол и ограничения](chatgpt-xhigh-2026-10-08.md).
+
 Дата проверки: 04.10.2026. Локальные проверки: clean npm ci, typecheck, Vitest
 **20 файлов / 174 теста**, demo/compare/export/resume, standard 16 × 2
 (22 passed / 10 pending), smoke 6. Реальные генерации моделей не выполнялись, API и
@@ -40,7 +47,7 @@ mock-smoke и загрузка JSON/HTML/PNG. В артефакте CI сохр�
 | OpenRouter candidate | Проверено HTTP: success/usage/errors/fees/budget/route | **Не проверено** | Один выбранный endpoint, usage и Activity/биллинг |
 | OpenRouter text/vision judge | Проверено HTTP, A/B, четыре PNG, порядок и расход | **Не проверено** | Реальная рубрика и ручная калибровка |
 | OpenRouter generation reconciliation | Проверено GET-заглушкой, unknown/idempotence | **Не проверено** | Реальная generation и окончательный total_cost |
-| Codex CLI | Проверено fake executable; установленный клиент диагностирован | **Не проверено** | Подписочный run и фактический JSONL текущей версии |
+| Codex CLI | Проверено fake executable | **Проверено: ChatGPT, 0.161.0, xhigh, 08.10.2026** | Actual model ID и внутренние retries не возвращены; это агентная оболочка |
 | Claude Code | Проверено fake executable; установленный клиент диагностирован | **Не проверено** | Отключённые Usage credits, подписочный run/usage |
 | Gemini CLI | Проверено fake executable | **Не проверено** | Клиент/официальный вход, проверка текущего stats |
 | Manual | Проверено импортом fixture, hashes/session/unknown | **Не проверено** | Настоящие сохранённые веб-ответы, заявленные условия |

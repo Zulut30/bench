@@ -77,13 +77,17 @@ async function frontend(kind) {
         const email = page.getByLabel('Email', { exact: true }), submit = page.getByRole('button', { name: 'Подписаться', exact: true }), status = page.getByRole('status');
         await email.fill(''); await submit.click(); check('empty-' + width, (await status.innerText()).includes('Введите email'), 'Пустой email: доступная ошибка');
         await email.fill('broken'); await submit.click(); check('invalid-' + width, (await status.innerText()).includes('Некорректный email'), 'Невалидный email: ошибка');
-        for (const invalid of ['@example.org', 'user@@example.org', 'user@example', 'user name@example.org']) {
+        // Точка в домене не оговорена заданием и не обязательна для HTML type=email.
+        for (const invalid of ['@example.org', 'user@@example.org', 'user name@example.org']) {
           await email.fill(invalid); await submit.click(); check('invalid-email-' + invalid + '-' + width, (await status.innerText()).includes('Некорректный email'), 'Отвергнут некорректный адрес: ' + invalid);
         }
         await email.fill('user@example.org'); await submit.click(); check('submit-' + width, (await status.innerText()).includes('Спасибо') && await email.inputValue() === '', 'Успешная подписка и очистка поля');
         await email.fill('other@example.org'); await submit.click(); check('repeat-' + width, (await status.innerText()).includes('Спасибо'), 'Повторное взаимодействие работает');
       } else {
-        const text = await page.locator('body').innerText(); check('design-content-' + width, ['Старт', 'Команда', 'Бизнес', '0 ₽', '990 ₽', '2990 ₽'].every(x => text.includes(x)) && await page.getByRole('button').count() >= 3, 'Три тарифа из брифа и кнопки');
+        const text = await page.locator('body').innerText();
+        check('design-content-' + width, ['Старт', 'Команда', 'Бизнес'].every(x => text.includes(x))
+          && [/(?<!\d)0\s*₽/, /(?<!\d)990\s*₽/, /(?<!\d)2990\s*₽/].every(pattern => pattern.test(text))
+          && (await page.getByRole('button').count() + await page.getByRole('link').count()) >= 3, 'Три тарифа из брифа и CTA (кнопки/ссылки)');
       }
       screenshots.push({ width, data: (await page.screenshot({ fullPage: true, animations: 'disabled' })).toString('base64') }); await context.close();
     }

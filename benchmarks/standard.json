@@ -1,7 +1,7 @@
 {
   "id": "practical-standard",
   "version": "standard-1",
-  "evaluationVersion": "standard-checks-1",
+  "evaluationVersion": "standard-checks-3",
   "tasks": [
     {
       "id": "v1-frontend",

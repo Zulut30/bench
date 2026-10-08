@@ -1,7 +1,7 @@
 {
   "id": "practical-pilot",
   "version": "pilot-1",
-  "evaluationVersion": "pilot-checks-2",
+  "evaluationVersion": "pilot-checks-3",
   "tasks": [
     {
       "id": "contact-form",

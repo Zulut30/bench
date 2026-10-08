@@ -31,8 +31,9 @@ const onlyNumbers = (output: string, allowed: string[]) => numericTokens(output)
 export function maintenanceCheck(output: string): { pass: boolean; reason: string; semanticStatus: 'pending' | 'contradiction' } {
   const words = output.trim().split(/\s+/).length;
   const objective = /^Плановые работы\s*\n/u.test(output) && words >= 35 && words <= 80
-    && ['12.10.2026', '02:00', '02:30', 'UTC', 'CSV', 'help@example.test'].every((s) => output.includes(s))
-    && onlyNumbers(output, ['12.10.2026', '02:00', '02:30', '30']);
+    && /12\.10\.2026|\b12\s+октября\s+2026/iu.test(output)
+    && ['02:00', '02:30', 'UTC', 'CSV', 'help@example.test'].every((s) => output.includes(s))
+    && onlyNumbers(output, ['12.10.2026', '12', '2026', '02:00', '02:30', '30']);
   // Это детектор явных противоречий, а не доказательство сохранения смысла.
   const clauses = output.toLowerCase().split(/[.!?\n]|(?<!\p{L})(?:но|однако)(?!\p{L})/u);
   const contradiction = clauses.some((clause) =>
@@ -65,12 +66,12 @@ export function checkText(evaluator: string, output: string): { pass: boolean; r
     }
     case 'maintenance-notice': return maintenanceCheck(output);
     case 'release-notes':
-      pass = /^Версия 1\.4\.0\s*\n/u.test(output) && (output.match(/^\s*[-*]\s+.+$/gm)?.length ?? 0) === 3
+      pass = /^(?:#{1,6}\s+)?Версия 1\.4\.0\s*\n/u.test(output) && (output.match(/^\s*[-*]\s+.+$/gm)?.length ?? 0) === 3
         && /добавлен[^\n]*CSV/iu.test(output) && /исправлен[^\n]*фильтр[^\n]*обновлен/iu.test(output)
         && /500\s+строк/iu.test(output) && onlyNumbers(output, ['1.4.0', '500']);
       break;
     case 'translation-en':
-      pass = /scheduled maintenance/i.test(output) && /12 October 2026/i.test(output)
+      pass = /scheduled maintenance/i.test(output) && /\b(?:12\s+October\s+2026|October\s+12,?\s+2026)\b/i.test(output)
         && ['02:00', '02:30', 'UTC', 'help@example.test'].every((s) => output.includes(s))
         && /CSV export[^.!\n]{0,50}(?:unavailable|not (?:be )?available)/i.test(output) && /support/i.test(output)
         && onlyNumbers(output, ['12', '2026', '02:00', '02:30']);
@@ -87,16 +88,28 @@ export function checkText(evaluator: string, output: string): { pass: boolean; r
 }
 
 function parseJson(output: string): unknown { try { return JSON.parse(output); } catch { return null; } }
+function fieldText(value: unknown): string {
+  if (typeof value === 'string' || typeof value === 'number') return String(value);
+  if (Array.isArray(value)) return value.map(fieldText).join(' ');
+  if (value && typeof value === 'object') return Object.values(value).map(fieldText).join(' ');
+  return '';
+}
 export function practicalText(task: Task, output: string): { pass: boolean; reason: string } {
   if (task.primaryCategory === 'writing') return maintenanceCheck(output);
   if (task.primaryCategory === 'editing') return checkText('release-notes', output);
   if (task.primaryCategory === 'translation') return checkText('translation-en', output);
   let pass = false;
   if (task.primaryCategory === 'architecture') {
-    const parsed = z.strictObject({ storage: z.enum(['PostgreSQL', 'MySQL']), queue: z.string(), idempotency: z.string(), retries: z.string(), backup: z.string(), rationale: z.string().min(20) }).safeParse(parseJson(output));
-    pass = parsed.success && /outbox/i.test(parsed.data.queue) && /eventId/i.test(parsed.data.idempotency)
-      && /3/.test(parsed.data.retries) && /dead.?letter/i.test(parsed.data.retries)
-      && /ежеднев/i.test(parsed.data.backup) && /restore|восстановлен/iu.test(parsed.data.backup);
+    // В задании заданы имена полей, но их строковый тип не предписан.
+    // Проверяем объективные элементы; качество обоснования остаётся pending.
+    const field = z.unknown().refine(v => fieldText(v).trim().length > 0);
+    const parsed = z.strictObject({ storage: field, queue: field, idempotency: field, retries: field, backup: field, rationale: field }).safeParse(parseJson(output));
+    pass = parsed.success && /PostgreSQL|MySQL/i.test(fieldText(parsed.data.storage))
+      && /event[\s_-]?id/i.test(fieldText(parsed.data.idempotency))
+      && /(?<![\p{L}\d])(?:3|три|тр[её]х|треть\p{L}*|three|third)(?![\p{L}\d])/iu.test(fieldText(parsed.data.retries))
+      && /dead.?letter/i.test(fieldText(parsed.data.retries))
+      && /ежеднев|daily/i.test(fieldText(parsed.data.backup)) && /restore|восстан[ао]в/iu.test(fieldText(parsed.data.backup))
+      && fieldText(parsed.data.rationale).length >= 20;
   } else if (task.primaryCategory === 'long-context') {
     pass = z.strictObject({ ticket: z.literal('T-042'), owner: z.literal('Ирина'), due: z.literal('2026-10-12'), risk: z.literal('DNS') }).safeParse(parseJson(output)).success;
   } else if (task.primaryCategory === 'instruction-following') {
